@@ -10,15 +10,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do repositório
+      - name: Repository Checkout
         uses: actions/checkout@v4
 
-      - name: Configurar Go
+      - name: ConfigureGo
         uses: actions/setup-go@v5
         with:
           go-version: stable
 
-      - name: Instalar GoReleaser
+      - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v5
         with:
           version: latest
