@@ -8,8 +8,6 @@ import (
 	"time"
 
 	gogpt "github.com/sashabaranov/go-openai"
-
-	"github.com/renatogalera/ai-commit/pkg/git"
 )
 
 func GetChatCompletion(prompt, apiKey string) (string, error) {
@@ -43,9 +41,11 @@ func BuildPrompt(diff, language, commitType string) string {
 	sb.WriteString("The commit message must include a short subject line starting with the commit type (e.g., 'feat: Add new feature'), followed by a blank line, and then a detailed body. ")
 	sb.WriteString("For the body, list each change as a separate bullet point, starting with a hyphen ('-'). ")
 	sb.WriteString("Write using the present tense and ensure clarity. Output only the commit message with no additional text. ")
+	sb.WriteString("Ignore changes to 'go.mod' and 'go.sum' files. ")
 	if commitType != "" {
 		sb.WriteString(fmt.Sprintf("Use the commit type '%s'. ", commitType))
 	}
+	sb.WriteString(fmt.Sprintf("Write the message in %s. ", language))
 	sb.WriteString("Here is the diff:\n\n")
 	sb.WriteString(diff)
 	return sb.String()
@@ -55,7 +55,6 @@ func MaybeSummarizeDiff(diff string, maxLength int) string {
 	if len(diff) <= maxLength {
 		return diff
 	}
-
 	truncated := diff[:maxLength]
 	if lastNewLine := strings.LastIndex(truncated, "\n"); lastNewLine != -1 {
 		truncated = truncated[:lastNewLine]
@@ -140,8 +139,4 @@ func AddGitmoji(message, commitType string) string {
 		return newMessage
 	}
 	return fmt.Sprintf("%s: %s", prefix, message)
-}
-
-func GetCurrentBranch() (string, error) {
-	return git.GetCurrentBranch()
 }
