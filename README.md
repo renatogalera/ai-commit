@@ -1,76 +1,84 @@
-# ai-commit
+# AI-Commit
 
-**ai-commit** is an AI-powered tool that automatically generates conventional Git commit messages based on your staged changes. It integrates with OpenAI's API to produce clear, concise, and standardized commit messages that follow the Conventional Commits specification.
-Inpired by [insulineru/ai-commit](https://github.com/insulineru/ai-commit)
+**AI-Commit** is an AI-powered tool that automatically generates [Conventional Commits](https://www.conventionalcommits.org/) based on your staged changes. It leverages [OpenAI](https://openai.com/) to produce concise, readable commit messages and now includes an **experimental semantic release feature** for automated versioning and releases. Inspired by [insulineru/ai-commit](https://github.com/insulineru/ai-commit).
 
 ---
 
 ## Table of Contents
 
-- [ai-commit](#ai-commit)
+- [AI-Commit](#ai-commit)
   - [Table of Contents](#table-of-contents)
-  - [Features](#features)
-  - [Requirements](#requirements)
+  - [Key Features](#key-features)
+  - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Configuration](#configuration)
     - [OpenAI API Key](#openai-api-key)
     - [Custom Templates](#custom-templates)
+    - [Semantic Release](#semantic-release)
   - [Usage](#usage)
     - [Command-Line Flags](#command-line-flags)
-  - [Under development](#under-development)
-    - [Environment Variables](#environment-variables)
-    - [Running the Tool](#running-the-tool)
-  - [Workflow](#workflow)
+  - [How it Works](#how-it-works)
   - [Examples](#examples)
-    - [Example 1: Standard Interactive Commit](#example-1-standard-interactive-commit)
-    - [Example 2: Force Commit Without Interaction](#example-2-force-commit-without-interaction)
-    - [Example 3: Using a Custom Template](#example-3-using-a-custom-template)
+    - [1. Standard Interactive Commit](#1-standard-interactive-commit)
+    - [2. Force Commit (Non-Interactive)](#2-force-commit-non-interactive)
+    - [3. Semantic Release](#3-semantic-release)
+    - [4. Custom Template](#4-custom-template)
   - [License](#license)
 
 ---
 
-## Features
+## Key Features
 
-- **AI-Powered Commit Message Generation:** Uses OpenAI's GPT to generate commit messages based on your staged diff.
-- **Conventional Commits Compliance:** Generates commit messages that follow the Conventional Commits specification.
-- **Customizable Commit Types:** Optionally specify commit types (e.g., feat, fix, docs) or let the tool detect them.
-- **Commit Message Templating:** Supports custom templates with placeholders such as `{COMMIT_MESSAGE}` and `{GIT_BRANCH}`.
-- **Interactive User Interface:** Provides a terminal UI for reviewing and regenerating commit messages.
-- **Force Commit Option:** Automatically commits changes without prompting if desired.
+1. **AI-Powered Commit Messages**  
+   Generates helpful commit messages by analyzing your staged diff and prompting OpenAI.
+
+2. **Conventional Commits Compliance**  
+   Ensures messages follow [Conventional Commits](https://www.conventionalcommits.org/) for a clean, interpretable commit history.
+
+3. **Interactive or Non-Interactive**  
+   Choose between a friendly TUI for confirming commits or a `--force` mode to skip prompts.
+
+4. **Customizable Commit Types**  
+   Specify a commit type (e.g., `feat`, `fix`, `docs`) or let the tool infer it automatically.
+
+5. **Custom Templates**  
+   Dynamically insert the AI-generated commit into custom templates with placeholders (e.g., branch name).
+
+6. **Semantic Release (Experimental)**  
+   Automatically suggests a new semantic version tag (`MAJOR.MINOR.PATCH`) based on the commit content, then optionally creates and pushes a new git tag, and invokes [GoReleaser](https://goreleaser.com/) to publish release artifacts.
 
 ---
 
-## Requirements
+## Prerequisites
 
-- **Git:** The tool operates on your local Git repository.
-- **Go:** Required for building from source.
-- **OpenAI API Key:** You must have an OpenAI API key to generate commit messages.
-- **Network Access:** Internet connection for API calls to OpenAI.
+- **Git**: AI-Commit operates on your local Git repository and requires Git installed.
+- **Go**: Needed to build AI-Commit from source.
+- **OpenAI API Key**: Sign up at [https://openai.com/](https://openai.com/) to get your API key.
 
 ---
 
 ## Installation
 
-1. **Clone the Repository:**
+1. **Clone the Repository**
 
    ```bash
    git clone https://github.com/renatogalera/ai-commit.git
    cd ai-commit
    ```
 
-2. **Build the Application:**
+2. **Build the Application**
 
    ```bash
-   go build -o ai-commit .
+   go build -o ai-commit ./cmd/ai-commit
    ```
 
-3. **(Optional) Install Globally:**
-
-   You can move the binary to a directory in your PATH (e.g., `/usr/local/bin`):
+3. **(Optional) Install Globally**
 
    ```bash
    sudo mv ai-commit /usr/local/bin/
    ```
+
+   Now `ai-commit` is accessible from anywhere in your terminal.
 
 ---
 
@@ -78,143 +86,140 @@ Inpired by [insulineru/ai-commit](https://github.com/insulineru/ai-commit)
 
 ### OpenAI API Key
 
-Provide your OpenAI API key either via the command-line flag or by setting the environment variable.
+Set your API key either via a command-line flag or an environment variable:
 
 - **Command-Line Flag:** `--apiKey YOUR_API_KEY`
-- **Environment Variable:** `OPENAI_API_KEY=YOUR_API_KEY`
+- **Environment Variable:**  
+  ```bash
+  export OPENAI_API_KEY=YOUR_API_KEY
+  ```
 
 ### Custom Templates
 
-You can define a custom commit message template using the `--template` flag. The template supports the following placeholders:
+Use the `--template` flag to supply a commit message template with placeholders:
 
-- `{COMMIT_MESSAGE}`: The commit message generated by the AI.
-- `{GIT_BRANCH}`: The current Git branch name.
+- **`{COMMIT_MESSAGE}`**  
+  The AI-generated commit message.
+
+- **`{GIT_BRANCH}`**  
+  The name of the current Git branch.
 
 For example:
 
 ```bash
---template "Branch: {GIT_BRANCH}\n\nCommit: {COMMIT_MESSAGE}"
+ai-commit --template "Branch: {GIT_BRANCH}\nCommit: {COMMIT_MESSAGE}"
 ```
+
+### Semantic Release
+
+To automatically suggest a next version and optionally create & push a git tag plus run [GoReleaser](https://goreleaser.com/):
+
+1. Install GoReleaser if you haven’t already:
+   ```bash
+   brew install goreleaser/tap/goreleaser
+   ```
+   or see [official installation docs](https://goreleaser.com/install/).
+
+2. Use `--semantic-release` when running AI-Commit. This will:
+   - Parse your current version (from the latest `vX.Y.Z` git tag).
+   - Consult OpenAI to determine if you need a MAJOR, MINOR, or PATCH bump.
+   - Automatically tag your repository, push the new tag, and run `goreleaser release --rm-dist`.
 
 ---
 
 ## Usage
 
-Run the application from within a Git repository with staged changes.
+Run **ai-commit** inside a Git repository with staged changes.
 
 ### Command-Line Flags
 
-- `--apiKey`  
-  OpenAI API key. If not provided, the tool will check the `OPENAI_API_KEY` environment variable.
-
-- `--commit-type`  
-  Specify the commit type (e.g., feat, fix, docs). If not provided, the tool may attempt to determine an appropriate type based on the generated message.
-
-- `--template`  
-  Custom commit message template. Use placeholders `{COMMIT_MESSAGE}` and `{GIT_BRANCH}` to include dynamic content.
-
-- `--force`  
-  Automatically create the commit without prompting for confirmation.
-
-## Under development
-
-- `--language`  
-  Language to generate the commit message in (default is "english").
-
-### Environment Variables
-
-- **OPENAI_API_KEY**  
-  Set this environment variable with your OpenAI API key if you prefer not to use the command-line flag.
-
-### Running the Tool
-
-1. **Standard Interactive Mode:**
-
-   In interactive mode, the tool displays the generated commit message and provides options to:
-   
-   - **Confirm Commit:** Press `y` or `enter` to commit the changes.
-   - **Regenerate Message:** Press `r` to regenerate the commit message.
-   - **Change Commit Type:** Press `t` to select a different commit type interactively.
-   - **Quit:** Press `q` or `ctrl+c` to exit without committing.
-
-   Example:
-
-   ```bash
-   ai-commit --apiKey YOUR_API_KEY
-   ```
-
-2. **Force Mode (Non-Interactive):**
-
-   If you want to bypass the interactive UI and commit automatically, use the `--force` flag.
-
-   Example:
-
-   ```bash
-   ai-commit --apiKey YOUR_API_KEY --force
-   ```
+- **`--apiKey`**  
+  Your OpenAI API key. If not set, the tool looks for `OPENAI_API_KEY`.
+- **`--commit-type`**  
+  Specify a commit type (`feat`, `fix`, `docs`, etc.). Otherwise the tool may infer it.
+- **`--template`**  
+  Custom template for your commit message.
+- **`--force`**  
+  Automatically commit without interactive confirmation.
+- **`--language`**  
+  Language used in AI generation (default `english`).
+- **`--semantic-release`**  
+  Triggers AI-assisted version bumping and release tasks (see [Semantic Release](#semantic-release)).
 
 ---
 
-## Workflow
+## How it Works
 
-1. **Verify Git Repository:**  
-   The tool first checks if the current directory is a Git repository.
+1. **Check Git**  
+   Ensures you’re in a valid Git repository and there are staged changes.
 
-2. **Get Staged Changes:**  
-   It retrieves the staged changes (the diff) and filters out lock files from being analyzed.
+2. **Retrieve Diff & Filter Lock Files**  
+   Pulls the staged diff and removes lock files (`go.mod`, `go.sum`, etc.) from analysis.
 
-3. **Generate Diff Prompt:**  
-   The tool constructs a prompt including the diff for OpenAI's API.
+3. **Generate AI Prompt**  
+   Assembles a request including your diff, commit type, and desired language.
 
-4. **Call OpenAI API:**  
-   A commit message is generated using the OpenAI API based on the prompt.
+4. **OpenAI Request**  
+   Calls OpenAI’s chat completion endpoint with the prompt, retrieving a commit message.
 
-5. **Sanitize & Format Message:**  
-   The generated message is sanitized, formatted with an appropriate commit type, and optionally modified with a custom template.
+5. **Sanitize & Format**  
+   Applies Conventional Commits formatting, adds an emoji prefix if possible, and substitutes into any template you provide.
 
-6. **Interactive Review:**  
-   If not in force mode, the tool provides a terminal UI to review, regenerate, or commit the changes.
+6. **Interactive UI**  
+   Presents a TUI to review and optionally regenerate the commit message unless `--force` is used.
 
-7. **Commit:**  
-   Upon confirmation, the tool creates a Git commit with the generated message.
+7. **Commit & Semantic Release**  
+   Commits your changes. If `--semantic-release` is enabled, AI-Commit:
+   - Reads the current version tag.
+   - Generates a recommended next version (MAJOR, MINOR, or PATCH).
+   - Creates and pushes a new Git tag.
+   - Invokes GoReleaser to build and publish your release artifacts.
 
 ---
 
 ## Examples
 
-### Example 1: Standard Interactive Commit
+### 1. Standard Interactive Commit
 
 ```bash
 ai-commit --apiKey YOUR_API_KEY
 ```
 
-After staging your changes with `git add`, run the command. Review the commit message in the UI, and press:
+1. Stage changes with `git add .`
+2. Let AI-Commit generate a message and show you an interactive UI:
+   - **Confirm** (`y` / `enter`)  
+   - **Regenerate** (`r`)  
+   - **Select Type** (`t`)  
+   - **Quit** (`q` / `ctrl+c`)
 
-- **`y`** or **`enter`** to commit.
-- **`r`** to regenerate the message.
-- **`t`** to select a different commit type.
-- **`q`** to quit.
-
-### Example 2: Force Commit Without Interaction
+### 2. Force Commit (Non-Interactive)
 
 ```bash
 ai-commit --apiKey YOUR_API_KEY --force
 ```
 
-This command automatically commits your changes with the generated commit message without entering interactive mode.
+Bypasses the interactive UI and commits immediately.
 
-### Example 3: Using a Custom Template
+### 3. Semantic Release
 
 ```bash
-ai-commit --apiKey YOUR_API_KEY --template "Branch: {GIT_BRANCH}\nCommit Message:\n{COMMIT_MESSAGE}"
+ai-commit --apiKey YOUR_API_KEY --semantic-release
 ```
 
-The generated commit message will be integrated into the template, including the current Git branch.
+1. Generates the commit message (interactive or forced).  
+2. After committing, it reads your latest version tag, queries OpenAI for a suggested version increment, tags your repository, and runs GoReleaser.  
+
+> **Tip**: Use `--force --semantic-release` to commit and release automatically in one go.
+
+### 4. Custom Template
+
+```bash
+ai-commit --template "Branch: {GIT_BRANCH}\nCommit: {COMMIT_MESSAGE}"
+```
+
+Inserts the current branch name and AI-generated message into the final commit log.
 
 ---
-
 ## License
 
-This project is open source and available under the [MIT License](LICENSE.md).
-
----
+This project is released under the [MIT License](LICENSE.md). Please see the LICENSE file for details.
