@@ -47,6 +47,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	validCommitTypes := map[string]bool{
+		"feat": true, "fix": true, "docs": true, "style": true,
+		"refactor": true, "test": true, "chore": true, "perf": true,
+		"build": true, "ci": true,
+	}
+	if *commitTypeFlag != "" && !validCommitTypes[*commitTypeFlag] {
+		log.Error().Msgf("Invalid commit type: %s", *commitTypeFlag)
+		os.Exit(1)
+	}
+
 	diff, err := git.GetGitDiff()
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting git diff")
@@ -76,17 +86,6 @@ func main() {
 	commitMsg, err := generateCommitMessage(cfg)
 	if err != nil {
 		log.Error().Err(err).Msg("Error generating commit message")
-		os.Exit(1)
-	}
-
-	validCommitTypes := map[string]bool{
-		"feat": true, "fix": true, "docs": true, "style": true,
-		"refactor": true, "test": true, "chore": true, "perf": true,
-		"build": true, "ci": true,
-	}
-
-	if *commitTypeFlag != "" && !validCommitTypes[*commitTypeFlag] {
-		log.Error().Msgf("Invalid commit type: %s", *commitTypeFlag)
 		os.Exit(1)
 	}
 
