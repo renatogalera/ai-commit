@@ -1,6 +1,7 @@
 # ai-commit
 
 **ai-commit** is an AI-powered tool that automatically generates conventional Git commit messages based on your staged changes. It integrates with OpenAI's API to produce clear, concise, and standardized commit messages that follow the Conventional Commits specification.
+Inpired by [insulineru/ai-commit](https://github.com/insulineru/ai-commit)
 
 ---
 
