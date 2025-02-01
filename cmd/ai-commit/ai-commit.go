@@ -79,6 +79,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	validCommitTypes := map[string]bool{
+		"feat": true, "fix": true, "docs": true, "style": true,
+		"refactor": true, "test": true, "chore": true, "perf": true,
+		"build": true, "ci": true,
+	}
+
+	if *commitTypeFlag != "" && !validCommitTypes[*commitTypeFlag] {
+		log.Error().Msgf("Invalid commit type: %s", *commitTypeFlag)
+		os.Exit(1)
+	}
+
 	if *forceFlag {
 		if strings.TrimSpace(commitMsg) == "" {
 			log.Error().Msg("Generated commit message is empty")
