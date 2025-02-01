@@ -16,15 +16,17 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/openai"
 	"github.com/renatogalera/ai-commit/pkg/template"
 	"github.com/renatogalera/ai-commit/pkg/ui"
+	"github.com/renatogalera/ai-commit/pkg/ui/splitter"
 	"github.com/renatogalera/ai-commit/pkg/versioner"
 )
 
 type Config struct {
-	Prompt          string
-	APIKey          string
-	CommitType      string
-	Template        string
-	SemanticRelease bool
+	Prompt           string
+	APIKey           string
+	CommitType       string
+	Template         string
+	SemanticRelease  bool
+	InteractiveSplit bool
 }
 
 func main() {
@@ -37,6 +39,8 @@ func main() {
 	templateFlag := flag.String("template", "", "Commit message template (e.g. \"Modified {GIT_BRANCH} | {COMMIT_MESSAGE}\")")
 	forceFlag := flag.Bool("force", false, "Automatically create the commit without prompting")
 	semanticReleaseFlag := flag.Bool("semantic-release", false, "Automatically suggest and/or tag a new version based on commit content and run GoReleaser")
+	interactiveSplitFlag := flag.Bool("interactive-split", false, "Split your staged changes into multiple commits interactively")
+
 	flag.Parse()
 
 	apiKey := *apiKeyFlag
@@ -58,6 +62,33 @@ func main() {
 		os.Exit(1)
 	}
 
+	// If user requested interactive split, launch the chunk-splitting TUI
+	if *interactiveSplitFlag {
+		if err := runInteractiveSplit(apiKey); err != nil {
+			log.Error().Err(err).Msg("Error running interactive split")
+			os.Exit(1)
+		}
+		// After successful interactive splitting, we can optionally do semantic release
+		if *semanticReleaseFlag {
+			// In a real scenario, you might gather final messages or read the last commit message
+			// For demonstration, we'll just look at the HEAD commit message
+			headMsg, _ := git.GetHeadCommitMessage()
+			cfg := Config{
+				APIKey:          apiKey,
+				SemanticRelease: true,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			if err := doSemanticRelease(ctx, cfg, headMsg); err != nil {
+				log.Error().Err(err).Msg("Error running semantic release")
+				os.Exit(1)
+			}
+		}
+		os.Exit(0)
+	}
+
+	// Regular single-commit flow:
 	diff, err := git.GetGitDiff()
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting git diff")
@@ -110,7 +141,6 @@ func main() {
 		}
 		fmt.Println("Commit created successfully!")
 
-		// If semantic release is enabled, proceed after forced commit
 		if cfg.SemanticRelease {
 			if err := doSemanticRelease(ctx, cfg, commitMsg); err != nil {
 				log.Error().Err(err).Msg("Error running semantic release")
@@ -127,7 +157,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// If user completed commit via TUI, check if we should do semantic release
 	if cfg.SemanticRelease {
 		if err := doSemanticRelease(ctx, cfg, commitMsg); err != nil {
 			log.Error().Err(err).Msg("Error running semantic release")
@@ -155,7 +184,6 @@ func generateCommitMessage(ctx context.Context, cfg Config) (string, error) {
 // doSemanticRelease triggers the version suggestion logic and optionally tags/releases
 func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error {
 	log.Info().Msg("Starting semantic release process...")
-	// 1. Detect current version (from last git tag)
 	currentVersion, err := versioner.GetCurrentVersionTag()
 	if err != nil {
 		return fmt.Errorf("failed to get current version tag: %w", err)
@@ -165,7 +193,6 @@ func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error 
 		currentVersion = "v0.0.0"
 	}
 
-	// 2. Use AI to suggest the next version
 	suggestedVersion, err := versioner.SuggestNextVersion(ctx, currentVersion, commitMsg, cfg.APIKey)
 	if err != nil {
 		return fmt.Errorf("failed to suggest next version: %w", err)
@@ -173,16 +200,49 @@ func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error 
 
 	log.Info().Msgf("Suggested next version: %s", suggestedVersion)
 
-	// 3. Tag locally (optional, can confirm with user)
 	if err := versioner.TagAndPush(suggestedVersion); err != nil {
 		return fmt.Errorf("failed to tag and push: %w", err)
 	}
 
-	// 4. Run GoReleaser (optional, if you want to publish right away)
 	if err := versioner.RunGoReleaser(); err != nil {
 		return fmt.Errorf("failed to run goreleaser: %w", err)
 	}
 
 	log.Info().Msgf("Semantic release completed: created and pushed tag %s", suggestedVersion)
+	return nil
+}
+
+// runInteractiveSplit is the main entry point for chunk-based splitting
+func runInteractiveSplit(apiKey string) error {
+	// We'll parse the staged diff into chunks, then run a TUI to let the user pick splits
+	diff, err := git.GetGitDiff()
+	if err != nil {
+		return err
+	}
+
+	// Filter out lock files
+	diff = git.FilterLockFiles(diff, []string{"go.mod", "go.sum"})
+	if strings.TrimSpace(diff) == "" {
+		fmt.Println("No changes to commit (after filtering lock files). Did you stage your changes?")
+		return nil
+	}
+
+	// We'll parse the diff into chunks
+	chunks, err := git.ParseDiffToChunks(diff)
+	if err != nil {
+		return fmt.Errorf("failed to parse diff: %w", err)
+	}
+
+	if len(chunks) == 0 {
+		fmt.Println("No diff chunks found.")
+		return nil
+	}
+
+	model := splitter.NewSplitterModel(chunks, apiKey)
+	p := splitter.NewProgram(model)
+	if err := p.Start(); err != nil {
+		return fmt.Errorf("splitter UI error: %w", err)
+	}
+
 	return nil
 }
