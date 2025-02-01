@@ -71,9 +71,9 @@ func TagAndPush(newVersionTag string) error {
 	return nil
 }
 
-// RunGoReleaser runs a local goreleaser release --rm-dist, building and publishing artifacts
+// RunGoReleaser runs a local goreleaser release , building and publishing artifacts
 func RunGoReleaser() error {
-	cmd := exec.Command("goreleaser", "release", "--rm-dist")
+	cmd := exec.Command("goreleaser", "release")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("goreleaser failed: %v\n%s", err, string(out))
