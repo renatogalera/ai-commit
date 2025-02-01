@@ -12,14 +12,13 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/git"
 )
 
-// GetChatCompletion replaces manual HTTP calls with the official go-openai client
 func GetChatCompletion(prompt, apiKey string) (string, error) {
 	client := gogpt.NewClient(apiKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	req := gogpt.ChatCompletionRequest{
-		Model: gogpt.GPT3Dot5Turbo, // or GPT4 if you prefer, e.g. "gpt-4"
+		Model: gogpt.GPT4oLatest,
 		Messages: []gogpt.ChatCompletionMessage{
 			{
 				Role:    gogpt.ChatMessageRoleUser,
@@ -43,6 +42,7 @@ func BuildPrompt(diff, language, commitType string) string {
 	sb.WriteString("Generate a git commit message that follows the Conventional Commits specification. ")
 	sb.WriteString("Use a short subject line preceded by the commit type (e.g., 'feat: Add new feature'), followed by a blank line, then a body explaining the changes. ")
 	sb.WriteString("Focus on clarity, using the present tense. Only output the commit message with no additional text. ")
+	sb.WriteString("Ignore go.mod` and `go.sum` files. ")
 	if commitType != "" {
 		sb.WriteString(fmt.Sprintf("Use the commit type '%s'. ", commitType))
 	}
