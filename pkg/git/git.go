@@ -35,18 +35,32 @@ func GetCurrentBranch() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func FilterLockFiles(diff string) string {
+func FilterLockFiles(diff string, lockFiles []string) string {
 	lines := strings.Split(diff, "\n")
 	var filtered []string
 	isLockFile := false
-	regex := regexp.MustCompile(`^diff --git a/(.*/)?(go\.mod|go\.sum)`)
+
+	patterns := make([]*regexp.Regexp, 0, len(lockFiles))
+	for _, lf := range lockFiles {
+		reg := regexp.MustCompile(`^diff --git a/(.*/)?(` + lf + `)`)
+		patterns = append(patterns, reg)
+	}
+
 	for _, line := range lines {
-		if regex.MatchString(line) {
-			isLockFile = true
-			continue
-		}
-		if isLockFile && strings.HasPrefix(line, "diff --git") {
-			isLockFile = false
+		if strings.HasPrefix(line, "diff --git") {
+			matchesLockFile := false
+			for _, p := range patterns {
+				if p.MatchString(line) {
+					matchesLockFile = true
+					break
+				}
+			}
+			if matchesLockFile {
+				isLockFile = true
+				continue
+			} else {
+				isLockFile = false
+			}
 		}
 		if !isLockFile {
 			filtered = append(filtered, line)
