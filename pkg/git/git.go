@@ -39,7 +39,7 @@ func FilterLockFiles(diff string) string {
 	lines := strings.Split(diff, "\n")
 	var filtered []string
 	isLockFile := false
-	regex := regexp.MustCompile(`^diff --git a/(.*/)?(yarn\.lock|pnpm-lock\.yaml|package-lock\.json)`)
+	regex := regexp.MustCompile(`^diff --git a/(.*/)?(go\.mod|go\.sum)`)
 	for _, line := range lines {
 		if regex.MatchString(line) {
 			isLockFile = true
@@ -65,4 +65,3 @@ func CommitChanges(commitMessage string) error {
 	}
 	return nil
 }
-
