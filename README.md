@@ -127,7 +127,7 @@ To automatically suggest the next version and optionally create & push a Git tag
 2. Use `--semantic-release` when running AI-Commit. This will:
    - Parse your current version (from the latest `vX.Y.Z` Git tag).
    - Consult OpenAI to determine if you need a MAJOR, MINOR, or PATCH bump.
-   - Automatically tag your repository, push the new tag, and run `goreleaser release --rm-dist`.
+   - Automatically tag your repository, push the new tag, and run `goreleaser release`.
 
 ---
 
