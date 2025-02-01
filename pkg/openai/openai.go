@@ -43,7 +43,6 @@ func BuildPrompt(diff, language, commitType string) string {
 	sb.WriteString("The commit message must include a short subject line starting with the commit type (e.g., 'feat: Add new feature'), followed by a blank line, and then a detailed body. ")
 	sb.WriteString("For the body, list each change as a separate bullet point, starting with a hyphen ('-'). ")
 	sb.WriteString("Write using the present tense and ensure clarity. Output only the commit message with no additional text. ")
-	sb.WriteString("Ignore changes to 'go.mod' and 'go.sum' files. ")
 	if commitType != "" {
 		sb.WriteString(fmt.Sprintf("Use the commit type '%s'. ", commitType))
 	}
