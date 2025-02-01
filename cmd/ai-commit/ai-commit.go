@@ -16,13 +16,15 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/openai"
 	"github.com/renatogalera/ai-commit/pkg/template"
 	"github.com/renatogalera/ai-commit/pkg/ui"
+	"github.com/renatogalera/ai-commit/pkg/versioner"
 )
 
 type Config struct {
-	Prompt     string
-	APIKey     string
-	CommitType string
-	Template   string
+	Prompt          string
+	APIKey          string
+	CommitType      string
+	Template        string
+	SemanticRelease bool
 }
 
 func main() {
@@ -34,6 +36,7 @@ func main() {
 	commitTypeFlag := flag.String("commit-type", "", "Commit type (e.g. feat, fix, docs)")
 	templateFlag := flag.String("template", "", "Commit message template (e.g. \"Modified {GIT_BRANCH} | {COMMIT_MESSAGE}\")")
 	forceFlag := flag.Bool("force", false, "Automatically create the commit without prompting")
+	semanticReleaseFlag := flag.Bool("semantic-release", false, "Automatically suggest and/or tag a new version based on commit content and run GoReleaser")
 	flag.Parse()
 
 	apiKey := *apiKeyFlag
@@ -80,10 +83,11 @@ func main() {
 	prompt := openai.BuildPrompt(diff, *languageFlag, *commitTypeFlag)
 
 	cfg := Config{
-		Prompt:     prompt,
-		APIKey:     apiKey,
-		CommitType: *commitTypeFlag,
-		Template:   *templateFlag,
+		Prompt:          prompt,
+		APIKey:          apiKey,
+		CommitType:      *commitTypeFlag,
+		Template:        *templateFlag,
+		SemanticRelease: *semanticReleaseFlag,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -105,6 +109,14 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("Commit created successfully!")
+
+		// If semantic release is enabled, proceed after forced commit
+		if cfg.SemanticRelease {
+			if err := doSemanticRelease(ctx, cfg, commitMsg); err != nil {
+				log.Error().Err(err).Msg("Error running semantic release")
+				os.Exit(1)
+			}
+		}
 		os.Exit(0)
 	}
 
@@ -113,6 +125,14 @@ func main() {
 	if err := p.Start(); err != nil {
 		log.Error().Err(err).Msg("Error running TUI program")
 		os.Exit(1)
+	}
+
+	// If user completed commit via TUI, check if we should do semantic release
+	if cfg.SemanticRelease {
+		if err := doSemanticRelease(ctx, cfg, commitMsg); err != nil {
+			log.Error().Err(err).Msg("Error running semantic release")
+			os.Exit(1)
+		}
 	}
 }
 
@@ -130,4 +150,39 @@ func generateCommitMessage(ctx context.Context, cfg Config) (string, error) {
 		}
 	}
 	return msg, nil
+}
+
+// doSemanticRelease triggers the version suggestion logic and optionally tags/releases
+func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error {
+	log.Info().Msg("Starting semantic release process...")
+	// 1. Detect current version (from last git tag)
+	currentVersion, err := versioner.GetCurrentVersionTag()
+	if err != nil {
+		return fmt.Errorf("failed to get current version tag: %w", err)
+	}
+	if currentVersion == "" {
+		log.Info().Msg("No existing version tag found, will assume v0.0.0")
+		currentVersion = "v0.0.0"
+	}
+
+	// 2. Use AI to suggest the next version
+	suggestedVersion, err := versioner.SuggestNextVersion(ctx, currentVersion, commitMsg, cfg.APIKey)
+	if err != nil {
+		return fmt.Errorf("failed to suggest next version: %w", err)
+	}
+
+	log.Info().Msgf("Suggested next version: %s", suggestedVersion)
+
+	// 3. Tag locally (optional, can confirm with user)
+	if err := versioner.TagAndPush(suggestedVersion); err != nil {
+		return fmt.Errorf("failed to tag and push: %w", err)
+	}
+
+	// 4. Run GoReleaser (optional, if you want to publish right away)
+	if err := versioner.RunGoReleaser(); err != nil {
+		return fmt.Errorf("failed to run goreleaser: %w", err)
+	}
+
+	log.Info().Msgf("Semantic release completed: created and pushed tag %s", suggestedVersion)
+	return nil
 }
