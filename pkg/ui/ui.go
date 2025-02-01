@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/git"
 	"github.com/renatogalera/ai-commit/pkg/openai"
 	"github.com/renatogalera/ai-commit/pkg/template"
@@ -56,10 +57,7 @@ func NewUIModel(commitMsg, prompt, apiKey, commitType, tmpl string) Model {
 		template:      tmpl,
 		spinner:       s,
 		selectedIndex: 0,
-		commitTypes: []string{
-			"feat", "fix", "docs", "refactor", "chore",
-			"test", "style", "build", "perf", "ci",
-		},
+		commitTypes:   committypes.AllTypes(),
 	}
 }
 
@@ -183,7 +181,7 @@ func regenCmd(prompt, apiKey, commitType, tmpl string) tea.Cmd {
 }
 
 func regenerate(prompt, apiKey, commitType, tmpl string) (string, error) {
-	result, err := openai.GetChatCompletion(prompt, apiKey)
+	result, err := openai.GetChatCompletion(nil, prompt, apiKey)
 	if err != nil {
 		return "", err
 	}
