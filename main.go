@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -18,6 +19,22 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+var commitTypes = []string{
+	"feat", "fix", "docs", "refactor", "chore",
+	"test", "style", "build", "perf", "ci",
+}
+
+func commitTypesPattern() string {
+	return strings.Join(commitTypes, "|")
+}
+
+func maybeSummarizeDiff(diff string, maxLength int) string {
+	if len(diff) > maxLength {
+		return diff[:maxLength] + "\n[... diff truncated for brevity ...]"
+	}
+	return diff
+}
 
 type OpenAIChatRequest struct {
 	Model    string              `json:"model"`
@@ -126,6 +143,12 @@ func callOpenAI(prompt, apiKey, model string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", errors.New("OpenAI returned status code " + resp.Status + ": " + string(body))
+	}
+
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -143,14 +166,10 @@ func callOpenAI(prompt, apiKey, model string) (string, error) {
 	return strings.TrimSpace(chatResp.Choices[0].Message.Content), nil
 }
 
-// Removes triple backticks and, if a commitType is specified, removes any
-// existing Conventional Commit prefix so we don't duplicate the type.
 func sanitizeOpenAIResponse(msg, commitType string) string {
 	msg = strings.ReplaceAll(msg, "```", "")
 	msg = strings.TrimSpace(msg)
 	if commitType != "" {
-		// Regex that attempts to remove any leading "<emoji>? <type>: " or "<type>: "
-		// from the first line only, if it exists.
 		pattern := regexp.MustCompile(`^(?:(\p{Emoji_Presentation}|\p{So}|\p{Sk}|:\w+:)\s*)?(feat|fix|docs|chore|refactor|test|style|build|perf|ci):\s*|(feat|fix|docs|chore|refactor|test|style|build|perf|ci):\s*`)
 		lines := strings.SplitN(msg, "\n", 2)
 		if len(lines) > 0 {
@@ -163,7 +182,6 @@ func sanitizeOpenAIResponse(msg, commitType string) string {
 }
 
 func addGitmoji(message, commitType string) string {
-	// Determine commit type from message if not provided
 	if commitType == "" {
 		lowerMsg := strings.ToLower(message)
 		switch {
@@ -191,9 +209,8 @@ func addGitmoji(message, commitType string) string {
 		return message
 	}
 
-	// Removed \p{Emoji_Presentation} since it's not supported in Go's regexp
-	emojiTypePattern := regexp.MustCompile(`^((\p{So}|\p{Sk}|:\w+:)\s+)?(feat|fix|docs|chore|refactor|test|style|build|perf|ci):`)
-	matches := emojiTypePattern.FindStringSubmatch(message)
+	emojiPattern := regexp.MustCompile(`^((\p{So}|\p{Sk}|:\w+:)\s+)?(` + commitTypesPattern() + `):`)
+	matches := emojiPattern.FindStringSubmatch(message)
 	if len(matches) > 0 && matches[1] != "" {
 		return message
 	}
@@ -216,7 +233,7 @@ func addGitmoji(message, commitType string) string {
 		prefix = fmt.Sprintf("%s %s", emoji, commitType)
 	}
 	if len(matches) > 0 {
-		newMessage := emojiTypePattern.ReplaceAllString(message, fmt.Sprintf("%s:", prefix))
+		newMessage := emojiPattern.ReplaceAllString(message, fmt.Sprintf("%s:", prefix))
 		return newMessage
 	}
 	return fmt.Sprintf("%s: %s", prefix, message)
@@ -252,47 +269,6 @@ type Config struct {
 	Template   string
 }
 
-func formatCommitMessage(msg string) string {
-	// Split the commit message into header and body based on two consecutive newlines.
-	parts := strings.SplitN(msg, "\n\n", 2)
-	if len(parts) < 2 {
-		return msg
-	}
-	header := parts[0]
-	body := parts[1]
-
-	// Split the body into lines.
-	lines := strings.Split(body, "\n")
-	totalLines := 0
-	bulletLines := 0
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed != "" {
-			totalLines++
-			if strings.HasPrefix(trimmed, "-") {
-				bulletLines++
-			}
-		}
-	}
-
-	// If most non-empty lines already start with a hyphen, assume it's formatted.
-	if totalLines > 0 && bulletLines >= totalLines/2 {
-		return msg
-	}
-
-	// Otherwise, split the body into sentences based on periods.
-	sentences := strings.Split(body, ".")
-	var formattedSentences []string
-	for _, sentence := range sentences {
-		trimmed := strings.TrimSpace(sentence)
-		if trimmed != "" {
-			formattedSentences = append(formattedSentences, "- "+trimmed+".")
-		}
-	}
-	formattedBody := strings.Join(formattedSentences, "\n")
-	return header + "\n\n" + formattedBody
-}
-
 func generateCommitMessage(cfg Config) (string, error) {
 	msg, err := callOpenAI(cfg.Prompt, cfg.APIKey, "chatgpt-4o-latest")
 	if err != nil {
@@ -306,8 +282,6 @@ func generateCommitMessage(cfg Config) (string, error) {
 			return "", err
 		}
 	}
-	// Post-process the commit message to enforce bullet point formatting in the body.
-	msg = formatCommitMessage(msg)
 	return msg, nil
 }
 
@@ -343,17 +317,13 @@ type uiModel struct {
 func newUIModel(commitMsg string, cfg Config) uiModel {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-
 	return uiModel{
 		state:         stateShowCommit,
 		commitMsg:     commitMsg,
 		config:        cfg,
 		spinner:       s,
 		selectedIndex: 0,
-		commitTypes: []string{
-			"feat", "fix", "docs", "refactor", "chore",
-			"test", "style", "build", "perf", "ci",
-		},
+		commitTypes:   commitTypes,
 	}
 }
 
@@ -377,7 +347,6 @@ func (m uiModel) Init() tea.Cmd {
 
 func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch m.state {
@@ -397,7 +366,6 @@ func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = stateSelectType
 				return m, nil
 			}
-
 		case stateSelectType:
 			switch msg.String() {
 			case "q", "ctrl+c":
@@ -418,11 +386,9 @@ func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinner.Spinner = spinner.Dot
 				return m, regenCmd(m.config)
 			}
-
 		case stateResult:
 			return m, tea.Quit
 		}
-
 	case regenMsg:
 		if msg.err != nil {
 			m.result = fmt.Sprintf("Error generating commit message: %v", msg.err)
@@ -431,7 +397,6 @@ func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.commitMsg = msg.msg
 			m.state = stateShowCommit
 		}
-
 	case commitResultMsg:
 		if msg.err != nil {
 			m.result = fmt.Sprintf("Commit failed: %v", msg.err)
@@ -439,14 +404,12 @@ func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.result = "Commit created successfully!"
 		}
 		m.state = stateResult
-
 	case spinner.TickMsg:
 		if m.state == stateGenerating || m.state == stateCommitting {
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
 		}
 	}
-
 	return m, nil
 }
 
@@ -519,6 +482,7 @@ func main() {
 		fmt.Println("Lock file changes will be committed but not analyzed for commit message generation.")
 	}
 
+	diff = maybeSummarizeDiff(diff, 5000)
 	prompt := buildPrompt(diff, *languageFlag, *commitTypeFlag)
 
 	cfg := Config{
