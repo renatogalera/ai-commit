@@ -17,10 +17,19 @@ func GetCurrentVersionTag() (string, error) {
 	cmd := exec.Command("git", "describe", "--tags", "--abbrev=0")
 	out, err := cmd.Output()
 	if err != nil {
-		// If no tags exist, we can return an empty string (not necessarily an error)
-		if strings.Contains(strings.ToLower(err.Error()), "no names found") {
+		// If Git returns an exit code of 128, usually no tags are present
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 128 {
+			return "", nil // no tags found, fallback to v0.0.0
+		}
+
+		// Alternatively, check error text
+		lowerErr := strings.ToLower(err.Error())
+		if strings.Contains(lowerErr, "no names found") ||
+			strings.Contains(lowerErr, "no tags can describe") {
 			return "", nil
 		}
+
+		// If it's a different error, return it
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
@@ -158,4 +167,3 @@ func itoa(i int) string {
 	}
 	return string(res)
 }
-
