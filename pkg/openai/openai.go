@@ -120,16 +120,17 @@ func AddGitmoji(message, commitType string) string {
 
 	gitmojis := map[string]string{
 		"feat":     "✨",
-		"fix":      "🚑",
-		"docs":     "📝",
-		"style":    "💄",
+		"fix":      "🐛",
+		"docs":     "📚",
+		"style":    "💎",
 		"refactor": "♻️",
-		"test":     "✅",
+		"test":     "🧪",
 		"chore":    "🔧",
-		"perf":     "⚡",
-		"build":    "👷",
-		"ci":       "🔧",
+		"perf":     "🚀",
+		"build":    "📦",
+		"ci":       "👷",
 	}
+
 	lowerType := strings.ToLower(commitType)
 	prefix := commitType
 	if emoji, ok := gitmojis[lowerType]; ok {
