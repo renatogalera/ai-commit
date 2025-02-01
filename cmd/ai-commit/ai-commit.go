@@ -79,6 +79,10 @@ func main() {
 	}
 
 	if *forceFlag {
+		if strings.TrimSpace(commitMsg) == "" {
+			log.Error().Msg("Generated commit message is empty")
+			os.Exit(1)
+		}
 		if err := git.CommitChanges(commitMsg); err != nil {
 			log.Error().Err(err).Msg("Error creating commit")
 			os.Exit(1)
