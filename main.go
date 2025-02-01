@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"flag"
@@ -13,21 +12,23 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
-// OpenAIChatRequest represents the request to the OpenAI Chat Completions API.
 type OpenAIChatRequest struct {
-	Model    string             `json:"model"`
+	Model    string              `json:"model"`
 	Messages []OpenAIChatMessage `json:"messages"`
 }
 
-// OpenAIChatMessage represents a message in the conversation.
 type OpenAIChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// OpenAIChatResponse represents the response from the OpenAI Chat Completions API.
 type OpenAIChatResponse struct {
 	Choices []struct {
 		Message struct {
@@ -39,7 +40,6 @@ type OpenAIChatResponse struct {
 	} `json:"error,omitempty"`
 }
 
-// getGitDiff retrieves the staged diff from the git repository.
 func getGitDiff() (string, error) {
 	cmd := exec.Command("git", "diff", "--staged")
 	out, err := cmd.Output()
@@ -49,7 +49,6 @@ func getGitDiff() (string, error) {
 	return string(out), nil
 }
 
-// checkGitRepository verifies that the current directory is inside a git repository.
 func checkGitRepository() bool {
 	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
 	out, err := cmd.Output()
@@ -59,7 +58,6 @@ func checkGitRepository() bool {
 	return strings.TrimSpace(string(out)) == "true"
 }
 
-// filterLockFiles removes diff lines corresponding to common lock files.
 func filterLockFiles(diff string) string {
 	lines := strings.Split(diff, "\n")
 	var filtered []string
@@ -80,7 +78,6 @@ func filterLockFiles(diff string) string {
 	return strings.Join(filtered, "\n")
 }
 
-// getCurrentBranch retrieves the current git branch.
 func getCurrentBranch() (string, error) {
 	cmd := exec.Command("git", "branch", "--show-current")
 	out, err := cmd.Output()
@@ -90,22 +87,19 @@ func getCurrentBranch() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// buildPrompt constructs the prompt for OpenAI based on the diff and provided options.
 func buildPrompt(diff, language, commitType string) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Write a professional git commit message based on the diff below in %s language", language))
+	sb.WriteString("Generate a git commit message that follows the Conventional Commits specification. ")
+	sb.WriteString("Use a short subject line preceded by the commit type (e.g., 'feat: Add new feature'), followed by a blank line, then a body explaining the changes. ")
+	sb.WriteString("Focus on clarity, using the present tense. Only output the commit message with no additional text. ")
 	if commitType != "" {
-		sb.WriteString(fmt.Sprintf(" with commit type '%s'.", commitType))
-	} else {
-		sb.WriteString(".")
+		sb.WriteString(fmt.Sprintf("Use the commit type '%s'. ", commitType))
 	}
-	sb.WriteString(" Do not preface the commit with anything, use the present tense and return a full sentence.")
-	sb.WriteString("\n\n")
+	sb.WriteString("Here is the diff:\n\n")
 	sb.WriteString(diff)
 	return sb.String()
 }
 
-// callOpenAI sends the prompt to the OpenAI API and returns the response message.
 func callOpenAI(prompt, apiKey, model string) (string, error) {
 	reqBody := OpenAIChatRequest{
 		Model: model,
@@ -120,26 +114,22 @@ func callOpenAI(prompt, apiKey, model string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	request, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		return "", err
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+apiKey)
-
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(request)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
-
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
-
 	var chatResp OpenAIChatResponse
 	if err := json.Unmarshal(respBytes, &chatResp); err != nil {
 		return "", err
@@ -153,11 +143,61 @@ func callOpenAI(prompt, apiKey, model string) (string, error) {
 	return strings.TrimSpace(chatResp.Choices[0].Message.Content), nil
 }
 
-// addGitmoji prepends a gitmoji to the commit message based on commit type.
-func addGitmoji(message, commitType string, addEmoji bool) string {
-	if !addEmoji {
+// Removes triple backticks and, if a commitType is specified, removes any
+// existing Conventional Commit prefix so we don't duplicate the type.
+func sanitizeOpenAIResponse(msg, commitType string) string {
+	msg = strings.ReplaceAll(msg, "```", "")
+	msg = strings.TrimSpace(msg)
+	if commitType != "" {
+		// Regex that attempts to remove any leading "<emoji>? <type>: " or "<type>: "
+		// from the first line only, if it exists.
+		pattern := regexp.MustCompile(`^(?:(\p{Emoji_Presentation}|\p{So}|\p{Sk}|:\w+:)\s*)?(feat|fix|docs|chore|refactor|test|style|build|perf|ci):\s*|(feat|fix|docs|chore|refactor|test|style|build|perf|ci):\s*`)
+		lines := strings.SplitN(msg, "\n", 2)
+		if len(lines) > 0 {
+			lines[0] = pattern.ReplaceAllString(lines[0], "")
+		}
+		msg = strings.Join(lines, "\n")
+		msg = strings.TrimSpace(msg)
+	}
+	return msg
+}
+
+func addGitmoji(message, commitType string) string {
+	// Determine commit type from message if not provided
+	if commitType == "" {
+		lowerMsg := strings.ToLower(message)
+		switch {
+		case strings.Contains(lowerMsg, "fix"):
+			commitType = "fix"
+		case strings.Contains(lowerMsg, "add"), strings.Contains(lowerMsg, "create"), strings.Contains(lowerMsg, "introduce"):
+			commitType = "feat"
+		case strings.Contains(lowerMsg, "doc"):
+			commitType = "docs"
+		case strings.Contains(lowerMsg, "refactor"):
+			commitType = "refactor"
+		case strings.Contains(lowerMsg, "test"):
+			commitType = "test"
+		case strings.Contains(lowerMsg, "perf"):
+			commitType = "perf"
+		case strings.Contains(lowerMsg, "build"):
+			commitType = "build"
+		case strings.Contains(lowerMsg, "ci"):
+			commitType = "ci"
+		case strings.Contains(lowerMsg, "chore"):
+			commitType = "chore"
+		}
+	}
+	if commitType == "" {
 		return message
 	}
+
+	// Removed \p{Emoji_Presentation} since it's not supported in Go's regexp
+	emojiTypePattern := regexp.MustCompile(`^((\p{So}|\p{Sk}|:\w+:)\s+)?(feat|fix|docs|chore|refactor|test|style|build|perf|ci):`)
+	matches := emojiTypePattern.FindStringSubmatch(message)
+	if len(matches) > 0 && matches[1] != "" {
+		return message
+	}
+
 	gitmojis := map[string]string{
 		"feat":     "✨",
 		"fix":      "🚑",
@@ -166,14 +206,22 @@ func addGitmoji(message, commitType string, addEmoji bool) string {
 		"refactor": "♻️",
 		"test":     "✅",
 		"chore":    "🔧",
+		"perf":     "⚡",
+		"build":    "👷",
+		"ci":       "🔧",
 	}
-	if emoji, ok := gitmojis[strings.ToLower(commitType)]; ok {
-		return fmt.Sprintf("%s %s", emoji, message)
+	lowerType := strings.ToLower(commitType)
+	prefix := commitType
+	if emoji, ok := gitmojis[lowerType]; ok {
+		prefix = fmt.Sprintf("%s %s", emoji, commitType)
 	}
-	return message
+	if len(matches) > 0 {
+		newMessage := emojiTypePattern.ReplaceAllString(message, fmt.Sprintf("%s:", prefix))
+		return newMessage
+	}
+	return fmt.Sprintf("%s: %s", prefix, message)
 }
 
-// applyTemplate replaces placeholders in the template with actual values.
 func applyTemplate(template, commitMessage string) (string, error) {
 	if !strings.Contains(template, "{COMMIT_MESSAGE}") {
 		return commitMessage, nil
@@ -189,7 +237,6 @@ func applyTemplate(template, commitMessage string) (string, error) {
 	return strings.TrimSpace(finalMsg), nil
 }
 
-// commitChanges runs the git commit command with the provided commit message.
 func commitChanges(commitMessage string) error {
 	cmd := exec.Command("git", "commit", "-F", "-")
 	cmd.Stdin = strings.NewReader(commitMessage)
@@ -198,13 +245,247 @@ func commitChanges(commitMessage string) error {
 	return cmd.Run()
 }
 
+type Config struct {
+	Prompt     string
+	APIKey     string
+	CommitType string
+	Template   string
+}
+
+func formatCommitMessage(msg string) string {
+	// Split the commit message into header and body based on two consecutive newlines.
+	parts := strings.SplitN(msg, "\n\n", 2)
+	if len(parts) < 2 {
+		return msg
+	}
+	header := parts[0]
+	body := parts[1]
+
+	// Split the body into lines.
+	lines := strings.Split(body, "\n")
+	totalLines := 0
+	bulletLines := 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			totalLines++
+			if strings.HasPrefix(trimmed, "-") {
+				bulletLines++
+			}
+		}
+	}
+
+	// If most non-empty lines already start with a hyphen, assume it's formatted.
+	if totalLines > 0 && bulletLines >= totalLines/2 {
+		return msg
+	}
+
+	// Otherwise, split the body into sentences based on periods.
+	sentences := strings.Split(body, ".")
+	var formattedSentences []string
+	for _, sentence := range sentences {
+		trimmed := strings.TrimSpace(sentence)
+		if trimmed != "" {
+			formattedSentences = append(formattedSentences, "- "+trimmed+".")
+		}
+	}
+	formattedBody := strings.Join(formattedSentences, "\n")
+	return header + "\n\n" + formattedBody
+}
+
+func generateCommitMessage(cfg Config) (string, error) {
+	msg, err := callOpenAI(cfg.Prompt, cfg.APIKey, "chatgpt-4o-latest")
+	if err != nil {
+		return "", err
+	}
+	msg = sanitizeOpenAIResponse(msg, cfg.CommitType)
+	msg = addGitmoji(msg, cfg.CommitType)
+	if cfg.Template != "" {
+		msg, err = applyTemplate(cfg.Template, msg)
+		if err != nil {
+			return "", err
+		}
+	}
+	// Post-process the commit message to enforce bullet point formatting in the body.
+	msg = formatCommitMessage(msg)
+	return msg, nil
+}
+
+type uiState int
+
+const (
+	stateShowCommit uiState = iota
+	stateGenerating
+	stateCommitting
+	stateResult
+	stateSelectType
+)
+
+type commitResultMsg struct {
+	err error
+}
+
+type regenMsg struct {
+	msg string
+	err error
+}
+
+type uiModel struct {
+	state         uiState
+	commitMsg     string
+	result        string
+	spinner       spinner.Model
+	config        Config
+	selectedIndex int
+	commitTypes   []string
+}
+
+func newUIModel(commitMsg string, cfg Config) uiModel {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+
+	return uiModel{
+		state:         stateShowCommit,
+		commitMsg:     commitMsg,
+		config:        cfg,
+		spinner:       s,
+		selectedIndex: 0,
+		commitTypes: []string{
+			"feat", "fix", "docs", "refactor", "chore",
+			"test", "style", "build", "perf", "ci",
+		},
+	}
+}
+
+func commitCmd(commitMsg string) tea.Cmd {
+	return func() tea.Msg {
+		err := commitChanges(commitMsg)
+		return commitResultMsg{err: err}
+	}
+}
+
+func regenCmd(cfg Config) tea.Cmd {
+	return func() tea.Msg {
+		msg, err := generateCommitMessage(cfg)
+		return regenMsg{msg: msg, err: err}
+	}
+}
+
+func (m uiModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch m.state {
+		case stateShowCommit:
+			switch msg.String() {
+			case "y", "enter":
+				m.state = stateCommitting
+				return m, commitCmd(m.commitMsg)
+			case "r":
+				m.state = stateGenerating
+				m.spinner = spinner.New()
+				m.spinner.Spinner = spinner.Dot
+				return m, regenCmd(m.config)
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			case "t":
+				m.state = stateSelectType
+				return m, nil
+			}
+
+		case stateSelectType:
+			switch msg.String() {
+			case "q", "ctrl+c":
+				m.state = stateShowCommit
+				return m, nil
+			case "up", "k":
+				if m.selectedIndex > 0 {
+					m.selectedIndex--
+				}
+			case "down", "j":
+				if m.selectedIndex < len(m.commitTypes)-1 {
+					m.selectedIndex++
+				}
+			case "enter":
+				m.config.CommitType = m.commitTypes[m.selectedIndex]
+				m.state = stateGenerating
+				m.spinner = spinner.New()
+				m.spinner.Spinner = spinner.Dot
+				return m, regenCmd(m.config)
+			}
+
+		case stateResult:
+			return m, tea.Quit
+		}
+
+	case regenMsg:
+		if msg.err != nil {
+			m.result = fmt.Sprintf("Error generating commit message: %v", msg.err)
+			m.state = stateResult
+		} else {
+			m.commitMsg = msg.msg
+			m.state = stateShowCommit
+		}
+
+	case commitResultMsg:
+		if msg.err != nil {
+			m.result = fmt.Sprintf("Commit failed: %v", msg.err)
+		} else {
+			m.result = "Commit created successfully!"
+		}
+		m.state = stateResult
+
+	case spinner.TickMsg:
+		if m.state == stateGenerating || m.state == stateCommitting {
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
+	}
+
+	return m, nil
+}
+
+func (m uiModel) View() string {
+	switch m.state {
+	case stateShowCommit:
+		return fmt.Sprintf(
+			"%s\n\nPress 'y' to commit, 'r' to regenerate,\n't' to change commit type, or 'q' to quit",
+			m.commitMsg,
+		)
+	case stateGenerating:
+		return fmt.Sprintf("Generating commit message... %s", m.spinner.View())
+	case stateCommitting:
+		return fmt.Sprintf("Committing... %s", m.spinner.View())
+	case stateResult:
+		return m.result
+	case stateSelectType:
+		var b strings.Builder
+		b.WriteString("Select commit type:\n\n")
+		for i, ct := range m.commitTypes {
+			cursor := " "
+			if i == m.selectedIndex {
+				cursor = ">"
+			}
+			b.WriteString(fmt.Sprintf("%s %s\n", cursor, ct))
+		}
+		b.WriteString("\nUse up/down arrows (or j/k) to navigate, enter to select,\n'q' to go back.\n")
+		return b.String()
+	}
+	return ""
+}
+
 func main() {
-	// Command-line flags
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
 	apiKeyFlag := flag.String("apiKey", "", "OpenAI API key (or set OPENAI_API_KEY environment variable)")
 	languageFlag := flag.String("language", "english", "Language for the commit message")
 	commitTypeFlag := flag.String("commit-type", "", "Commit type (e.g. feat, fix, docs)")
 	templateFlag := flag.String("template", "", "Commit message template (e.g. \"Modified {GIT_BRANCH} | {COMMIT_MESSAGE}\")")
-	addEmojiFlag := flag.Bool("emoji", false, "Add a gitmoji to the commit message")
 	forceFlag := flag.Bool("force", false, "Automatically create the commit without prompting")
 	flag.Parse()
 
@@ -213,76 +494,59 @@ func main() {
 		apiKey = os.Getenv("OPENAI_API_KEY")
 	}
 	if apiKey == "" {
-		fmt.Println("Error: OpenAI API key must be provided via --apiKey flag or OPENAI_API_KEY environment variable.")
+		log.Error().Msg("OpenAI API key must be provided via --apiKey flag or OPENAI_API_KEY environment variable")
 		os.Exit(1)
 	}
 
 	if !checkGitRepository() {
-		fmt.Println("Error: This is not a git repository.")
+		log.Error().Msg("This is not a git repository")
 		os.Exit(1)
 	}
 
 	diff, err := getGitDiff()
 	if err != nil {
-		fmt.Printf("Error getting git diff: %v\n", err)
+		log.Error().Err(err).Msg("Error getting git diff")
 		os.Exit(1)
 	}
 
 	originalDiff := diff
 	diff = filterLockFiles(diff)
-	if diff == "" {
+	if strings.TrimSpace(diff) == "" {
 		fmt.Println("No changes to commit (after filtering lock files). Did you stage your changes?")
 		os.Exit(0)
 	}
 	if diff != originalDiff {
-		fmt.Println("Note: Changes in lock files will be committed but not analyzed for commit message generation.")
+		fmt.Println("Lock file changes will be committed but not analyzed for commit message generation.")
 	}
 
 	prompt := buildPrompt(diff, *languageFlag, *commitTypeFlag)
-	fmt.Println("Prompt sent to OpenAI:")
-	fmt.Println(prompt)
 
-	commitMsg, err := callOpenAI(prompt, apiKey, "gpt-4o-mini")
+	cfg := Config{
+		Prompt:     prompt,
+		APIKey:     apiKey,
+		CommitType: *commitTypeFlag,
+		Template:   *templateFlag,
+	}
+
+	commitMsg, err := generateCommitMessage(cfg)
 	if err != nil {
-		fmt.Printf("Error calling OpenAI: %v\n", err)
+		log.Error().Err(err).Msg("Error generating commit message")
 		os.Exit(1)
 	}
 
-	commitMsg = addGitmoji(commitMsg, *commitTypeFlag, *addEmojiFlag)
-
-	if *templateFlag != "" {
-		commitMsg, err = applyTemplate(*templateFlag, commitMsg)
-		if err != nil {
-			fmt.Printf("Error applying template: %v\n", err)
+	if *forceFlag {
+		if err := commitChanges(commitMsg); err != nil {
+			log.Error().Err(err).Msg("Error creating commit")
 			os.Exit(1)
 		}
+		fmt.Println("Commit created successfully!")
+		os.Exit(0)
 	}
 
-	fmt.Println("Proposed Commit Message:")
-	fmt.Println("------------------------------")
-	fmt.Println(commitMsg)
-	fmt.Println("------------------------------")
-
-	if !*forceFlag {
-		fmt.Print("Do you want to continue? (y/n): ")
-		reader := bufio.NewReader(os.Stdin)
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Printf("Error reading input: %v\n", err)
-			os.Exit(1)
-		}
-		input = strings.TrimSpace(strings.ToLower(input))
-		if input != "y" && input != "yes" {
-			fmt.Println("Commit aborted.")
-			os.Exit(0)
-		}
-	}
-
-	err = commitChanges(commitMsg)
-	if err != nil {
-		fmt.Printf("Error creating commit: %v\n", err)
+	model := newUIModel(commitMsg, cfg)
+	p := tea.NewProgram(model, tea.WithAltScreen())
+	if err := p.Start(); err != nil {
+		log.Error().Err(err).Msg("Error running TUI program")
 		os.Exit(1)
 	}
-	fmt.Println("Commit created successfully!")
 }
-
