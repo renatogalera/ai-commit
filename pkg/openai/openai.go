@@ -53,10 +53,15 @@ func BuildPrompt(diff, language, commitType string) string {
 }
 
 func MaybeSummarizeDiff(diff string, maxLength int) string {
-	if len(diff) > maxLength {
-		return diff[:maxLength] + "\n[... diff truncated for brevity ...]"
+	if len(diff) <= maxLength {
+		return diff
 	}
-	return diff
+
+	truncated := diff[:maxLength]
+	if lastNewLine := strings.LastIndex(truncated, "\n"); lastNewLine != -1 {
+		truncated = truncated[:lastNewLine]
+	}
+	return truncated + "\n[... diff truncated for brevity ...]"
 }
 
 func SanitizeOpenAIResponse(msg, commitType string) string {
