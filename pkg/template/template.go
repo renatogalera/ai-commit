@@ -6,17 +6,19 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/git"
 )
 
-func ApplyTemplate(template, commitMessage string) (string, error) {
-	if !strings.Contains(template, "{COMMIT_MESSAGE}") {
-		return commitMessage, nil
+func ApplyTemplate(templateStr, commitMessage string) (string, error) {
+	result := templateStr
+	if strings.Contains(result, "{COMMIT_MESSAGE}") {
+		result = strings.ReplaceAll(result, "{COMMIT_MESSAGE}", commitMessage)
 	}
-	finalMsg := strings.ReplaceAll(template, "{COMMIT_MESSAGE}", commitMessage)
-	if strings.Contains(finalMsg, "{GIT_BRANCH}") {
+
+	if strings.Contains(result, "{GIT_BRANCH}") {
 		branch, err := git.GetCurrentBranch()
 		if err != nil {
 			return "", err
 		}
-		finalMsg = strings.ReplaceAll(finalMsg, "{GIT_BRANCH}", branch)
+		result = strings.ReplaceAll(result, "{GIT_BRANCH}", branch)
 	}
-	return strings.TrimSpace(finalMsg), nil
+
+	return result, nil
 }
