@@ -39,10 +39,11 @@ func GetChatCompletion(prompt, apiKey string) (string, error) {
 
 func BuildPrompt(diff, language, commitType string) string {
 	var sb strings.Builder
-	sb.WriteString("Generate a git commit message that follows the Conventional Commits specification. ")
-	sb.WriteString("Use a short subject line preceded by the commit type (e.g., 'feat: Add new feature'), followed by a blank line, then a body explaining the changes. ")
-	sb.WriteString("Focus on clarity, using the present tense. Only output the commit message with no additional text. ")
-	sb.WriteString("Ignore go.mod` and `go.sum` files. ")
+	sb.WriteString("Generate a git commit message following the Conventional Commits specification. ")
+	sb.WriteString("The commit message must include a short subject line starting with the commit type (e.g., 'feat: Add new feature'), followed by a blank line, and then a detailed body. ")
+	sb.WriteString("For the body, list each change as a separate bullet point, starting with a hyphen ('-'). ")
+	sb.WriteString("Write using the present tense and ensure clarity. Output only the commit message with no additional text. ")
+	sb.WriteString("Ignore changes to 'go.mod' and 'go.sum' files. ")
 	if commitType != "" {
 		sb.WriteString(fmt.Sprintf("Use the commit type '%s'. ", commitType))
 	}
