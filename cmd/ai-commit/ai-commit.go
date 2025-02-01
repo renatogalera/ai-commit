@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/git"
 	"github.com/renatogalera/ai-commit/pkg/openai"
 	"github.com/renatogalera/ai-commit/pkg/template"
@@ -47,12 +50,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	validCommitTypes := map[string]bool{
-		"feat": true, "fix": true, "docs": true, "style": true,
-		"refactor": true, "test": true, "chore": true, "perf": true,
-		"build": true, "ci": true,
-	}
-	if *commitTypeFlag != "" && !validCommitTypes[*commitTypeFlag] {
+	if *commitTypeFlag != "" && !committypes.IsValidCommitType(*commitTypeFlag) {
 		log.Error().Msgf("Invalid commit type: %s", *commitTypeFlag)
 		os.Exit(1)
 	}
@@ -64,7 +62,7 @@ func main() {
 	}
 
 	originalDiff := diff
-	diff = git.FilterLockFiles(diff)
+	diff = git.FilterLockFiles(diff, []string{"go.mod", "go.sum"})
 	if strings.TrimSpace(diff) == "" {
 		fmt.Println("No changes to commit (after filtering lock files). Did you stage your changes?")
 		os.Exit(0)
@@ -73,7 +71,12 @@ func main() {
 		fmt.Println("Lock file changes will be committed but not analyzed for commit message generation.")
 	}
 
-	diff = openai.MaybeSummarizeDiff(diff, 5000)
+	truncated := false
+	diff, truncated = openai.MaybeSummarizeDiff(diff, 5000)
+	if truncated {
+		fmt.Println("Note: The diff was truncated for brevity.")
+	}
+
 	prompt := openai.BuildPrompt(diff, *languageFlag, *commitTypeFlag)
 
 	cfg := Config{
@@ -83,7 +86,10 @@ func main() {
 		Template:   *templateFlag,
 	}
 
-	commitMsg, err := generateCommitMessage(cfg)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	commitMsg, err := generateCommitMessage(ctx, cfg)
 	if err != nil {
 		log.Error().Err(err).Msg("Error generating commit message")
 		os.Exit(1)
@@ -110,8 +116,8 @@ func main() {
 	}
 }
 
-func generateCommitMessage(cfg Config) (string, error) {
-	msg, err := openai.GetChatCompletion(cfg.Prompt, cfg.APIKey)
+func generateCommitMessage(ctx context.Context, cfg Config) (string, error) {
+	msg, err := openai.GetChatCompletion(ctx, cfg.Prompt, cfg.APIKey)
 	if err != nil {
 		return "", err
 	}
