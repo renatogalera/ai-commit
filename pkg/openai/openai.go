@@ -4,15 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-
 	"regexp"
+	"strings"
 
 	gogpt "github.com/sashabaranov/go-openai"
 
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 )
 
+// GetChatCompletion calls the OpenAI API to generate a chat completion based on the provided prompt.
 func GetChatCompletion(ctx context.Context, prompt, apiKey string) (string, error) {
 	client := gogpt.NewClient(apiKey)
 
@@ -28,7 +28,7 @@ func GetChatCompletion(ctx context.Context, prompt, apiKey string) (string, erro
 
 	resp, err := client.CreateChatCompletion(ctx, req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get chat completion: %w", err)
 	}
 	if len(resp.Choices) == 0 {
 		return "", errors.New("no response from OpenAI")
@@ -36,6 +36,7 @@ func GetChatCompletion(ctx context.Context, prompt, apiKey string) (string, erro
 	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }
 
+// BuildPrompt constructs the prompt for the OpenAI API based on the diff, language, and commit type.
 func BuildPrompt(diff, language, commitType string) string {
 	var sb strings.Builder
 	sb.WriteString("Generate a git commit message following the Conventional Commits specification. ")
@@ -52,6 +53,7 @@ func BuildPrompt(diff, language, commitType string) string {
 	return sb.String()
 }
 
+// MaybeSummarizeDiff truncates the diff if it exceeds maxLength, appending a truncation notice.
 func MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
 	if len(diff) <= maxLength {
 		return diff, false
@@ -65,6 +67,7 @@ func MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
 	return truncated, true
 }
 
+// SanitizeOpenAIResponse cleans the OpenAI response by removing code blocks and unnecessary prefixes.
 func SanitizeOpenAIResponse(msg, commitType string) string {
 	msg = strings.ReplaceAll(msg, "```", "")
 	msg = strings.TrimSpace(msg)
@@ -81,6 +84,7 @@ func SanitizeOpenAIResponse(msg, commitType string) string {
 	return msg
 }
 
+// AddGitmoji prepends a gitmoji to the commit message based on the commit type.
 func AddGitmoji(message, commitType string) string {
 	if commitType == "" {
 		lowerMsg := strings.ToLower(message)

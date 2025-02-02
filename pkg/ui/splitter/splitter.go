@@ -16,7 +16,9 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/openai"
 )
 
-// splitterState enumerates possible states in the TUI
+// Import context for partialCommit.
+
+// splitterState represents the state of the interactive splitter UI.
 type splitterState int
 
 const (
@@ -25,7 +27,7 @@ const (
 	stateCommitted
 )
 
-// chunkItem is the list.Item implementation for Bubbles
+// chunkItem implements list.Item for displaying diff chunks.
 type chunkItem struct {
 	Chunk    git.DiffChunk
 	Selected bool
@@ -35,7 +37,7 @@ func (ci chunkItem) Title() string       { return ci.Chunk.FilePath }
 func (ci chunkItem) Description() string { return ci.Chunk.HunkHeader }
 func (ci chunkItem) FilterValue() string { return ci.Chunk.FilePath }
 
-// Model for interactive splitting
+// Model represents the state of the interactive splitter.
 type Model struct {
 	state        splitterState
 	list         list.Model
@@ -46,6 +48,7 @@ type Model struct {
 	commitResult string
 }
 
+// NewSplitterModel creates a new splitter model with the given diff chunks and API key.
 func NewSplitterModel(chunks []git.DiffChunk, apiKey string) Model {
 	items := make([]list.Item, 0, len(chunks))
 	for _, c := range chunks {
@@ -70,14 +73,17 @@ func NewSplitterModel(chunks []git.DiffChunk, apiKey string) Model {
 	}
 }
 
+// NewProgram creates a new Bubble Tea program for the splitter UI.
 func NewProgram(m Model) *tea.Program {
 	return tea.NewProgram(m)
 }
 
+// Init is the initialization function for the splitter.
 func (m Model) Init() tea.Cmd {
 	return nil
 }
 
+// Update updates the splitter model based on incoming messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -87,15 +93,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
-		// toggle chunk selection
+		// Toggle chunk selection.
 		case " ":
 			index := m.list.Index()
 			m.selected[index] = !m.selected[index]
 			return m, nil
-		// commit selected chunks
+		// Commit selected chunks.
 		case "c":
 			return m.updateCommit()
-		// demonstrate an "auto-group" approach
+		// Auto-select all chunks.
 		case "a":
 			return m.updateAutoGroup()
 		}
@@ -106,12 +112,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
-	// Let the list handle its own updates
 	newList, cmd := m.list.Update(msg)
 	m.list = newList
 	return m, cmd
 }
 
+// View renders the splitter UI based on the current state.
 func (m Model) View() string {
 	switch m.state {
 	case stateList:
@@ -124,13 +130,11 @@ func (m Model) View() string {
 	return ""
 }
 
-// updateCommit handles partial staging, AI message generation, commit creation
+// updateCommit handles the process of committing selected chunks.
 func (m Model) updateCommit() (tea.Model, tea.Cmd) {
-	// Mark state as spinner
 	newModel := m
 	newModel.state = stateSpinner
 
-	// We'll do the partial commit in a command
 	return newModel, func() tea.Msg {
 		if err := partialCommit(m.chunks, m.selected, m.apiKey); err != nil {
 			newModel.commitResult = fmt.Sprintf("Error: %v", err)
@@ -142,22 +146,17 @@ func (m Model) updateCommit() (tea.Model, tea.Cmd) {
 	}
 }
 
-// updateAutoGroup simulates chunk grouping by AI
+// updateAutoGroup selects all chunks for auto grouping.
 func (m Model) updateAutoGroup() (tea.Model, tea.Cmd) {
-	// For demonstration, let's say "select all" or something more advanced
 	for i := range m.chunks {
 		m.selected[i] = true
 	}
 	return m, nil
 }
 
-// partialCommit:
-// 1) resets all staged changes
-// 2) builds a patch from selected chunks
-// 3) applies the patch to stage only those lines
-// 4) uses AI to generate the commit message
-// 5) commits them
+// partialCommit stages selected diff chunks and commits them with an AI-generated commit message.
 func partialCommit(chunks []git.DiffChunk, selected map[int]bool, apiKey string) error {
+	// Reset staged changes.
 	if err := run("git", "reset"); err != nil {
 		return fmt.Errorf("failed to reset: %w", err)
 	}
@@ -192,6 +191,7 @@ func partialCommit(chunks []git.DiffChunk, selected map[int]bool, apiKey string)
 	return nil
 }
 
+// buildPatch constructs a patch string from the selected diff chunks.
 func buildPatch(chunks []git.DiffChunk, selected map[int]bool) (string, error) {
 	var sb strings.Builder
 	for i, c := range chunks {
@@ -203,7 +203,6 @@ func buildPatch(chunks []git.DiffChunk, selected map[int]bool) (string, error) {
 		sb.WriteString("+++ b/" + c.FilePath + "\n")
 		sb.WriteString(c.HunkHeader + "\n")
 		for _, line := range c.Lines {
-			// line might be +, -, or context
 			sb.WriteString(line + "\n")
 		}
 	}
@@ -214,7 +213,7 @@ func buildPatch(chunks []git.DiffChunk, selected map[int]bool) (string, error) {
 	return patch, nil
 }
 
-// buildCommitPrompt is a simplified prompt for AI
+// buildCommitPrompt creates a prompt for the AI to generate a commit message for the partial diff.
 func buildCommitPrompt(diff string) string {
 	return fmt.Sprintf(`
 Generate a commit message for the following partial diff.
@@ -226,6 +225,7 @@ Diff:
 `, diff)
 }
 
+// run executes an external command and returns any error encountered.
 func run(cmdName string, args ...string) error {
 	cmd := exec.Command(cmdName, args...)
 	cmd.Stdout = os.Stdout

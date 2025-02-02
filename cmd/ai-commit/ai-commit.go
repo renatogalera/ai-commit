@@ -22,6 +22,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/versioner"
 )
 
+// Config holds the configuration values for the commit process.
 type Config struct {
 	Prompt           string
 	APIKey           string
@@ -31,6 +32,9 @@ type Config struct {
 	InteractiveSplit bool
 }
 
+const defaultTimeout = 60 * time.Second
+
+// main initializes the application, parses flags, and starts the commit process.
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -64,20 +68,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	// If user requested interactive split, launch the chunk-splitting TUI
+	// If interactive splitting is requested, run the interactive splitter
 	if *interactiveSplitFlag {
 		if err := runInteractiveSplit(apiKey); err != nil {
 			log.Error().Err(err).Msg("Error running interactive split")
 			os.Exit(1)
 		}
-		// After successful interactive splitting, we can optionally do semantic release
+		// Optionally run semantic release after successful interactive splitting
 		if *semanticReleaseFlag {
 			headMsg, _ := git.GetHeadCommitMessage()
 			cfg := Config{
 				APIKey:          apiKey,
 				SemanticRelease: true,
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 			defer cancel()
 
 			if err := doSemanticRelease(ctx, cfg, headMsg); err != nil {
@@ -121,7 +125,7 @@ func main() {
 		SemanticRelease: *semanticReleaseFlag,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	commitMsg, err := generateCommitMessage(ctx, cfg)
@@ -150,10 +154,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Launch interactive UI for commit message review and regeneration.
 	model := ui.NewUIModel(commitMsg, cfg.Prompt, cfg.APIKey, cfg.CommitType, cfg.Template)
 	p := ui.NewProgram(model)
 	if err := p.Start(); err != nil {
-		// If the error is due to a normal cancellation, do not treat it as a failure.
 		if errors.Is(err, context.Canceled) {
 			os.Exit(0)
 		}
@@ -169,6 +173,7 @@ func main() {
 	}
 }
 
+// generateCommitMessage calls the OpenAI API to generate a commit message.
 func generateCommitMessage(ctx context.Context, cfg Config) (string, error) {
 	msg, err := openai.GetChatCompletion(ctx, cfg.Prompt, cfg.APIKey)
 	if err != nil {
@@ -185,14 +190,15 @@ func generateCommitMessage(ctx context.Context, cfg Config) (string, error) {
 	return msg, nil
 }
 
+// doSemanticRelease handles the semantic versioning release process.
 func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error {
 	log.Info().Msg("Starting semantic release process...")
-	currentVersion, err := versioner.GetCurrentVersionTag()
+	currentVersion, err := versioner.GetCurrentVersionTag(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get current version tag: %w", err)
 	}
 	if currentVersion == "" {
-		log.Info().Msg("No existing version tag found, will assume v0.0.0")
+		log.Info().Msg("No existing version tag found, assuming v0.0.0")
 		currentVersion = "v0.0.0"
 	}
 
@@ -203,11 +209,11 @@ func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error 
 
 	log.Info().Msgf("Suggested next version: %s", suggestedVersion)
 
-	if err := versioner.TagAndPush(suggestedVersion); err != nil {
+	if err := versioner.TagAndPush(ctx, suggestedVersion); err != nil {
 		return fmt.Errorf("failed to tag and push: %w", err)
 	}
 
-	if err := versioner.RunGoReleaser(); err != nil {
+	if err := versioner.RunGoReleaser(ctx); err != nil {
 		return fmt.Errorf("failed to run goreleaser: %w", err)
 	}
 
@@ -215,6 +221,7 @@ func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error 
 	return nil
 }
 
+// runInteractiveSplit launches the interactive UI for splitting diffs into multiple commits.
 func runInteractiveSplit(apiKey string) error {
 	diff, err := git.GetGitDiff()
 	if err != nil {
