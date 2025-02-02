@@ -257,8 +257,3 @@ Adds a relevant emoji to the beginning of your commit message if a recognized co
 ## License
 
 This project is released under the [MIT License](LICENSE.md). Please see the LICENSE file for details.
-```
-
-**Notes**  
-1. The new `--emoji` flag is entirely optional.  
-2. If you don’t pass `--emoji`, no emoji prefix is added to your commit messages.  
