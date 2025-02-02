@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	gogpt "github.com/sashabaranov/go-openai"
 
 	"github.com/renatogalera/ai-commit/pkg/committypes"
@@ -21,12 +22,13 @@ import (
 type uiState int
 
 const (
-	stateShowCommit uiState = iota // Shows generated commit
-	stateGenerating                // Shows spinner while generating a new commit
-	stateCommitting                // Shows spinner while committing
-	stateResult                    // Shows final result or error
-	stateSelectType                // Allows selecting commit type
-	stateEditing                   // Allows editing the commit message
+	stateShowCommit    uiState = iota // Shows generated commit
+	stateGenerating                   // Shows spinner while generating a new commit
+	stateCommitting                   // Shows spinner while committing
+	stateResult                       // Shows final result or error
+	stateSelectType                   // Allows selecting commit type
+	stateEditing                      // Allows editing the commit message
+	stateEditingPrompt                // Allows editing the custom prompt
 )
 
 // commitResultMsg is returned when a commit attempt finishes.
@@ -42,13 +44,18 @@ type regenMsg struct {
 
 // Model defines the state for the TUI.
 type Model struct {
-	state         uiState
-	commitMsg     string
-	result        string
-	spinner       spinner.Model
-	prompt        string
-	commitType    string
-	template      string
+	state     uiState
+	commitMsg string
+	result    string
+	spinner   spinner.Model
+
+	// We store the original diff/language so we can rebuild the prompt if user changes it
+	diff       string
+	language   string
+	prompt     string
+	commitType string
+	template   string
+
 	enableEmoji   bool
 	openAIClient  *gogpt.Client
 	selectedIndex int
@@ -56,13 +63,20 @@ type Model struct {
 	regenCount    int
 	maxRegens     int
 
-	// Text area for editing the commit message
+	// Text area for editing the commit message or custom prompt
 	textarea textarea.Model
 }
+
+// Style for the "help" instructions
+var helpStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("212")).
+	Bold(true)
 
 // NewUIModel creates a new UI model with the provided parameters.
 func NewUIModel(
 	commitMsg string,
+	diff string,
+	language string,
 	prompt string,
 	commitType string,
 	tmpl string,
@@ -73,7 +87,7 @@ func NewUIModel(
 	s.Spinner = spinner.Dot
 
 	ta := textarea.New()
-	ta.Placeholder = "Edit your commit message here"
+	ta.Placeholder = "Edit here..."
 	ta.Prompt = "> "
 	ta.CharLimit = 0 // No character limit
 	ta.SetWidth(50)
@@ -83,6 +97,8 @@ func NewUIModel(
 	return Model{
 		state:         stateShowCommit,
 		commitMsg:     commitMsg,
+		diff:          diff,
+		language:      language,
 		prompt:        prompt,
 		commitType:    commitType,
 		template:      tmpl,
@@ -152,6 +168,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textarea.SetValue(m.commitMsg)
 				m.textarea.Focus()
 				return m, nil
+
+			case "p":
+				// User wants to edit the custom prompt
+				m.state = stateEditingPrompt
+				m.textarea.SetValue("") // Start blank or you could show existing
+				m.textarea.Focus()
+				return m, nil
 			}
 
 		//----------------------------------------------------------------------
@@ -159,7 +182,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		//----------------------------------------------------------------------
 		case stateSelectType:
 			switch msg.String() {
-			case "q", "ctrl+c":
+			case "q", "esc", "ctrl+c":
 				m.state = stateShowCommit
 				return m, nil
 			case "up", "k":
@@ -177,11 +200,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinner = spinner.New()
 				m.spinner.Spinner = spinner.Dot
 				m.regenCount++
+				// Build a fresh prompt with the new commit type
+				m.prompt = openai.BuildPrompt(m.diff, m.language, m.commitType, "")
 				return m, regenCmd(m.openAIClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 			}
 
 		//----------------------------------------------------------------------
-		// EDITING SCREEN: stateEditing
+		// EDITING COMMIT MESSAGE: stateEditing
 		//----------------------------------------------------------------------
 		case stateEditing:
 			// Pass the keypress to the textarea
@@ -200,6 +225,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.commitMsg = m.textarea.Value()
 				m.state = stateShowCommit
 				return m, cmd
+			}
+
+		//----------------------------------------------------------------------
+		// EDITING CUSTOM PROMPT: stateEditingPrompt
+		//----------------------------------------------------------------------
+		case stateEditingPrompt:
+			var tcmd tea.Cmd
+			m.textarea, tcmd = m.textarea.Update(msg)
+			cmd = tea.Batch(cmd, tcmd)
+
+			switch msg.String() {
+			case "esc":
+				// Discard changes and return
+				m.state = stateShowCommit
+				return m, cmd
+
+			case "ctrl+s":
+				// The user has added custom prompt text;
+				// we rebuild the prompt, then regenerate
+				userPrompt := m.textarea.Value()
+				m.state = stateGenerating
+				m.spinner = spinner.New()
+				m.spinner.Spinner = spinner.Dot
+				m.regenCount++
+
+				// Rebuild the prompt with the additional text
+				m.prompt = openai.BuildPrompt(m.diff, m.language, m.commitType, userPrompt)
+				return m, regenCmd(m.openAIClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 			}
 
 		//----------------------------------------------------------------------
@@ -239,24 +292,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// We might have sub-updates that return commands
-	newModel, subCmd := m.updateList(msg)
-	return newModel, tea.Batch(cmd, subCmd)
-}
-
-// updateList is a helper function that could update an internal list if used.
-func (m Model) updateList(_ tea.Msg) (tea.Model, tea.Cmd) {
-	return m, nil
+	// We might have sub-updates that return commands, in case we had lists, etc.
+	return m, cmd
 }
 
 // View renders the UI based on the current state.
 func (m Model) View() string {
 	switch m.state {
 	case stateShowCommit:
-		return fmt.Sprintf(
-			"%s\n\nPress 'y' to commit, 'r' to regenerate,\n'e' to edit message, 't' to change commit type,\nor 'q' to quit.",
-			m.commitMsg,
+		helpText := helpStyle.Render(
+			"Press 'y' to commit, 'r' to regenerate,\n" +
+				"'e' to edit message, 't' to change commit type,\n" +
+				"'p' to add custom prompt, or 'q' to quit.",
 		)
+		return fmt.Sprintf("%s\n\n%s", m.commitMsg, helpText)
 
 	case stateGenerating:
 		return fmt.Sprintf("Generating commit message... %s", m.spinner.View())
@@ -277,13 +326,19 @@ func (m Model) View() string {
 			}
 			b.WriteString(fmt.Sprintf("%s %s\n", cursor, ct))
 		}
-		b.WriteString("\nUse up/down arrows (or j/k) to navigate, enter to select,\n'q' to go back.\n")
+		b.WriteString("\nUse up/down arrows (or j/k) to navigate, enter to select,\n'q' or esc to go back.\n")
 		return b.String()
 
 	case stateEditing:
-		// Show the text area for editing
+		// Show the text area for editing the commit message
 		return fmt.Sprintf(
 			"Editing commit message (Press ESC to discard, Ctrl+S to save):\n\n%s",
+			m.textarea.View(),
+		)
+
+	case stateEditingPrompt:
+		return fmt.Sprintf(
+			"Add custom prompt text (Press ESC to discard, Ctrl+S to apply):\n\n%s",
 			m.textarea.View(),
 		)
 	}
