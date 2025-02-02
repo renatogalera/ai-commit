@@ -150,7 +150,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // updateList is a helper function to update the list component if needed.
-func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) updateList(_ tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
