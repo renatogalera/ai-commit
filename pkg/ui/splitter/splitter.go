@@ -91,15 +91,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
-		// Toggle chunk selection.
 		case " ":
 			index := m.list.Index()
 			m.selected[index] = !m.selected[index]
 			return m, nil
-		// Commit selected chunks.
 		case "c":
 			return m.updateCommit()
-		// Auto-select all chunks.
 		case "a":
 			return m.updateAutoGroup()
 		}
@@ -154,7 +151,6 @@ func (m Model) updateAutoGroup() (tea.Model, tea.Cmd) {
 
 // partialCommit stages selected diff chunks and commits them with an AI-generated commit message.
 func partialCommit(chunks []git.DiffChunk, selected map[int]bool, apiKey string) error {
-	// Reset staged changes.
 	if err := run("git", "reset"); err != nil {
 		return fmt.Errorf("failed to reset: %w", err)
 	}
@@ -223,7 +219,6 @@ Diff:
 `, diff)
 }
 
-// run executes an external command and returns any error encountered.
 func run(cmdName string, args ...string) error {
 	cmd := exec.Command(cmdName, args...)
 	cmd.Stdout = os.Stdout

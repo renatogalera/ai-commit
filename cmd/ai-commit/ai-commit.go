@@ -30,6 +30,7 @@ type Config struct {
 	Template         string
 	SemanticRelease  bool
 	InteractiveSplit bool
+	EnableEmoji      bool
 }
 
 const defaultTimeout = 60 * time.Second
@@ -46,6 +47,7 @@ func main() {
 	forceFlag := flag.Bool("force", false, "Automatically create the commit without prompting")
 	semanticReleaseFlag := flag.Bool("semantic-release", false, "Automatically suggest and/or tag a new version based on commit content and run GoReleaser")
 	interactiveSplitFlag := flag.Bool("interactive-split", false, "Split your staged changes into multiple commits interactively")
+	emojiFlag := flag.Bool("emoji", false, "Include an emoji prefix in the commit message")
 
 	flag.Parse()
 
@@ -92,7 +94,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Regular single-commit flow:
 	diff, err := git.GetGitDiff()
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting git diff")
@@ -123,6 +124,7 @@ func main() {
 		CommitType:      *commitTypeFlag,
 		Template:        *templateFlag,
 		SemanticRelease: *semanticReleaseFlag,
+		EnableEmoji:     *emojiFlag,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
@@ -154,8 +156,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Launch interactive UI for commit message review and regeneration.
-	model := ui.NewUIModel(commitMsg, cfg.Prompt, cfg.APIKey, cfg.CommitType, cfg.Template)
+	model := ui.NewUIModel(commitMsg, cfg.Prompt, cfg.APIKey, cfg.CommitType, cfg.Template, cfg.EnableEmoji)
 	p := ui.NewProgram(model)
 	if err := p.Start(); err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -180,7 +181,9 @@ func generateCommitMessage(ctx context.Context, cfg Config) (string, error) {
 		return "", err
 	}
 	msg = openai.SanitizeOpenAIResponse(msg, cfg.CommitType)
-	msg = openai.AddGitmoji(msg, cfg.CommitType)
+	if cfg.EnableEmoji {
+		msg = openai.AddGitmoji(msg, cfg.CommitType)
+	}
 	if cfg.Template != "" {
 		msg, err = template.ApplyTemplate(cfg.Template, msg)
 		if err != nil {
