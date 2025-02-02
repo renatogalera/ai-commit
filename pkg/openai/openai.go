@@ -12,10 +12,13 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 )
 
-// GetChatCompletion calls the OpenAI API to generate a chat completion based on the provided prompt.
-func GetChatCompletion(ctx context.Context, prompt, apiKey string) (string, error) {
-	client := gogpt.NewClient(apiKey)
+// sanitizePattern is a precompiled regex that removes the conventional commit
+// prefix if it exists. We build it dynamically using valid commit types.
+var sanitizePattern = regexp.MustCompile(`^(?:(\p{So}|\p{Sk}|:\w+:)\s*)?(` + committypes.TypesRegexPattern() + `)(\([^)]+\))?:\s*`)
 
+// GetChatCompletion calls the OpenAI API using a shared *gogpt.Client
+// and returns the generated string.
+func GetChatCompletion(ctx context.Context, client *gogpt.Client, prompt string) (string, error) {
 	req := gogpt.ChatCompletionRequest{
 		Model: gogpt.GPT4oLatest,
 		Messages: []gogpt.ChatCompletionMessage{
@@ -70,30 +73,27 @@ func MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
 	return truncated, true
 }
 
-// SanitizeOpenAIResponse cleans the OpenAI response by removing code blocks and unnecessary prefixes.
+// SanitizeOpenAIResponse cleans the OpenAI response by removing code fences and
+// removing any leading Conventional Commit tokens if the user already specified a type.
 func SanitizeOpenAIResponse(msg, commitType string) string {
 	msg = strings.ReplaceAll(msg, "```", "")
 	msg = strings.TrimSpace(msg)
 
+	// If commitType is non-empty, remove any raw "type: " prefix from the user-provided message.
 	if commitType != "" {
-		// We remove the raw "feat:" etc. only if it matches our pattern.
-		pattern := regexp.MustCompile(`^(?:(\p{So}|\p{Sk}|:\w+:)\s*)?(` + committypes.TypesRegexPattern() + `)(\([^)]+\))?:\s*`)
 		lines := strings.SplitN(msg, "\n", 2)
 		if len(lines) > 0 {
-			lines[0] = pattern.ReplaceAllString(lines[0], "")
+			lines[0] = sanitizePattern.ReplaceAllString(lines[0], "")
 		}
 		msg = strings.Join(lines, "\n")
 		msg = strings.TrimSpace(msg)
 	}
-
 	return msg
 }
 
 // AddGitmoji prepends an emoji (if applicable) to the commit message based on the commit type.
-// This updated version also captures an optional (scope) so that "feat(README): ..." will match properly.
+// Falls back to guess a commit type if not provided, but will skip if no match is found.
 func AddGitmoji(message, commitType string) string {
-	// If the user didn't pass --commit-type, we do a naive guess.
-	// This block is optional but often helpful.
 	if commitType == "" {
 		lowerMsg := strings.ToLower(message)
 		switch {
@@ -118,13 +118,11 @@ func AddGitmoji(message, commitType string) string {
 		}
 	}
 
-	// If we can't detect a commit type, just return as-is.
 	if commitType == "" {
 		return message
 	}
 
-	// Map each commit type to a fitting emoji.
-	prefix := commitType
+	// Map each commit type to an emoji.
 	gitmojis := map[string]string{
 		"feat":     "✨",
 		"fix":      "🐛",
@@ -137,32 +135,18 @@ func AddGitmoji(message, commitType string) string {
 		"build":    "📦",
 		"ci":       "👷",
 	}
-
+	prefix := commitType
 	if emoji, ok := gitmojis[commitType]; ok {
 		prefix = fmt.Sprintf("%s %s", emoji, commitType)
 	}
 
-	// If the commit message already starts with an emoji or recognized pattern, we skip re-injecting it.
+	// Check if the message already starts with a recognized pattern (type/emoji).
 	emojiPattern := committypes.BuildRegexPatternWithEmoji()
 	matches := emojiPattern.FindStringSubmatch(message)
 	if len(matches) > 0 {
-		// matches[1] is the optional existing emoji
-		// matches[3] is the commit type itself
-		// matches[4] is the optional (scope)
-		if matches[1] != "" {
-			// There's already an emoji, so don't double up
-			return message
-		}
-		// Preserve the scope if present
-		scope := ""
-		if len(matches) >= 5 {
-			scope = matches[4]
-		}
-		// Replace everything up to the colon with "emoji + type + (scope):"
-		newMessage := emojiPattern.ReplaceAllString(message, fmt.Sprintf("%s%s:", prefix, scope))
-		return newMessage
+		// There's already a leading pattern, skip adding a new prefix
+		return message
 	}
 
-	// If the user typed something that doesn't match the pattern at all, just prefix it:
 	return fmt.Sprintf("%s: %s", prefix, message)
 }

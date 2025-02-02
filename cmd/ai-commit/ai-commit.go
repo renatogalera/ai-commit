@@ -13,6 +13,8 @@ import (
 
 	"errors"
 
+	gogpt "github.com/sashabaranov/go-openai"
+
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/git"
 	"github.com/renatogalera/ai-commit/pkg/openai"
@@ -22,7 +24,14 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/versioner"
 )
 
+// defaultTimeout is the timeout used for OpenAI requests. Git commands
+// will reuse a smaller or equal context as needed.
+const defaultTimeout = 60 * time.Second
+
 // Config holds the configuration values for the commit process.
+// We only use this struct locally now, to gather flags. We pass
+// only the necessary parameters to each function rather than the
+// entire struct.
 type Config struct {
 	Prompt           string
 	APIKey           string
@@ -32,8 +41,6 @@ type Config struct {
 	InteractiveSplit bool
 	EnableEmoji      bool
 }
-
-const defaultTimeout = 60 * time.Second
 
 // main initializes the application, parses flags, and starts the commit process.
 func main() {
@@ -45,7 +52,7 @@ func main() {
 	commitTypeFlag := flag.String("commit-type", "", "Commit type (e.g. feat, fix, docs)")
 	templateFlag := flag.String("template", "", "Commit message template (e.g. \"Modified {GIT_BRANCH} | {COMMIT_MESSAGE}\")")
 	forceFlag := flag.Bool("force", false, "Automatically create the commit without prompting")
-	semanticReleaseFlag := flag.Bool("semantic-release", false, "Automatically suggest and/or tag a new version based on commit content and run GoReleaser")
+	semanticReleaseFlag := flag.Bool("semantic-release", false, "Automatically suggest/tag a new version and run GoReleaser")
 	interactiveSplitFlag := flag.Bool("interactive-split", false, "Split your staged changes into multiple commits interactively")
 	emojiFlag := flag.Bool("emoji", false, "Include an emoji prefix in the commit message")
 
@@ -60,33 +67,35 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !git.CheckGitRepository() {
+	// Create a shared OpenAI client for reuse.
+	openAIClient := gogpt.NewClient(apiKey)
+
+	// Create a context with timeout for the entire main flow.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	// Check if this is a valid Git repo.
+	if !git.CheckGitRepository(ctx) {
 		log.Error().Msg("This is not a git repository")
 		os.Exit(1)
 	}
 
+	// Validate commit type if provided.
 	if *commitTypeFlag != "" && !committypes.IsValidCommitType(*commitTypeFlag) {
 		log.Error().Msgf("Invalid commit type: %s", *commitTypeFlag)
 		os.Exit(1)
 	}
 
-	// If interactive splitting is requested, run the interactive splitter
+	// If interactive splitting is requested, run the interactive splitter and exit.
 	if *interactiveSplitFlag {
-		if err := runInteractiveSplit(apiKey); err != nil {
+		if err := runInteractiveSplit(ctx, openAIClient); err != nil {
 			log.Error().Err(err).Msg("Error running interactive split")
 			os.Exit(1)
 		}
-		// Optionally run semantic release after successful interactive splitting
+		// Optionally run semantic release after successful interactive splitting.
 		if *semanticReleaseFlag {
-			headMsg, _ := git.GetHeadCommitMessage()
-			cfg := Config{
-				APIKey:          apiKey,
-				SemanticRelease: true,
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-			defer cancel()
-
-			if err := doSemanticRelease(ctx, cfg, headMsg); err != nil {
+			headMsg, _ := git.GetHeadCommitMessage(ctx)
+			if err := doSemanticRelease(ctx, openAIClient, headMsg); err != nil {
 				log.Error().Err(err).Msg("Error running semantic release")
 				os.Exit(1)
 			}
@@ -94,12 +103,14 @@ func main() {
 		os.Exit(0)
 	}
 
-	diff, err := git.GetGitDiff()
+	// Get the staged diff to analyze.
+	diff, err := git.GetGitDiff(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting git diff")
 		os.Exit(1)
 	}
 
+	// Filter out lock files from analysis (but keep them staged).
 	originalDiff := diff
 	diff = git.FilterLockFiles(diff, []string{"go.mod", "go.sum"})
 	if strings.TrimSpace(diff) == "" {
@@ -110,6 +121,7 @@ func main() {
 		fmt.Println("Lock file changes will be committed but not analyzed for commit message generation.")
 	}
 
+	// Possibly truncate the diff if it's huge.
 	truncated := false
 	diff, truncated = openai.MaybeSummarizeDiff(diff, 5000)
 	if truncated {
@@ -118,6 +130,7 @@ func main() {
 
 	prompt := openai.BuildPrompt(diff, *languageFlag, *commitTypeFlag)
 
+	// Prepare local config.
 	cfg := Config{
 		Prompt:          prompt,
 		APIKey:          apiKey,
@@ -127,28 +140,35 @@ func main() {
 		EnableEmoji:     *emojiFlag,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
-
-	commitMsg, err := generateCommitMessage(ctx, cfg)
+	// Generate commit message using the single openAIClient.
+	commitMsg, err := generateCommitMessage(
+		ctx,
+		openAIClient,
+		cfg.Prompt,
+		cfg.CommitType,
+		cfg.Template,
+		cfg.EnableEmoji,
+	)
 	if err != nil {
 		log.Error().Err(err).Msg("Error generating commit message")
 		os.Exit(1)
 	}
 
+	// If --force is used, commit immediately.
 	if *forceFlag {
 		if strings.TrimSpace(commitMsg) == "" {
 			log.Error().Msg("Generated commit message is empty")
 			os.Exit(1)
 		}
-		if err := git.CommitChanges(commitMsg); err != nil {
+		if err := git.CommitChanges(ctx, commitMsg); err != nil {
 			log.Error().Err(err).Msg("Error creating commit")
 			os.Exit(1)
 		}
 		fmt.Println("Commit created successfully!")
 
+		// Possibly run semantic release after a forced commit.
 		if cfg.SemanticRelease {
-			if err := doSemanticRelease(ctx, cfg, commitMsg); err != nil {
+			if err := doSemanticRelease(ctx, openAIClient, commitMsg); err != nil {
 				log.Error().Err(err).Msg("Error running semantic release")
 				os.Exit(1)
 			}
@@ -156,7 +176,15 @@ func main() {
 		os.Exit(0)
 	}
 
-	model := ui.NewUIModel(commitMsg, cfg.Prompt, cfg.APIKey, cfg.CommitType, cfg.Template, cfg.EnableEmoji)
+	// If we are here, we launch the interactive TUI for commit confirmation/regeneration.
+	model := ui.NewUIModel(
+		commitMsg,
+		cfg.Prompt,
+		cfg.CommitType,
+		cfg.Template,
+		cfg.EnableEmoji,
+		openAIClient,
+	)
 	p := ui.NewProgram(model)
 	if err := p.Start(); err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -166,8 +194,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// If TUI is done and semantic release is requested, do it now.
 	if cfg.SemanticRelease {
-		if err := doSemanticRelease(ctx, cfg, commitMsg); err != nil {
+		if err := doSemanticRelease(ctx, openAIClient, commitMsg); err != nil {
 			log.Error().Err(err).Msg("Error running semantic release")
 			os.Exit(1)
 		}
@@ -175,17 +204,29 @@ func main() {
 }
 
 // generateCommitMessage calls the OpenAI API to generate a commit message.
-func generateCommitMessage(ctx context.Context, cfg Config) (string, error) {
-	msg, err := openai.GetChatCompletion(ctx, cfg.Prompt, cfg.APIKey)
+// This function is decoupled from the config struct, receiving only what it needs.
+func generateCommitMessage(
+	ctx context.Context,
+	client *gogpt.Client,
+	prompt string,
+	commitType string,
+	templateStr string,
+	enableEmoji bool,
+) (string, error) {
+	// Generate from OpenAI
+	msg, err := openai.GetChatCompletion(ctx, client, prompt)
 	if err != nil {
 		return "", err
 	}
-	msg = openai.SanitizeOpenAIResponse(msg, cfg.CommitType)
-	if cfg.EnableEmoji {
-		msg = openai.AddGitmoji(msg, cfg.CommitType)
+	// Clean up the message
+	msg = openai.SanitizeOpenAIResponse(msg, commitType)
+	// Possibly add an emoji prefix
+	if enableEmoji {
+		msg = openai.AddGitmoji(msg, commitType)
 	}
-	if cfg.Template != "" {
-		msg, err = template.ApplyTemplate(cfg.Template, msg)
+	// Apply the user-defined template
+	if templateStr != "" {
+		msg, err = template.ApplyTemplate(templateStr, msg)
 		if err != nil {
 			return "", err
 		}
@@ -194,8 +235,10 @@ func generateCommitMessage(ctx context.Context, cfg Config) (string, error) {
 }
 
 // doSemanticRelease handles the semantic versioning release process.
-func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error {
+// It does not depend on a full config struct, only the parameters needed.
+func doSemanticRelease(ctx context.Context, client *gogpt.Client, commitMsg string) error {
 	log.Info().Msg("Starting semantic release process...")
+
 	currentVersion, err := versioner.GetCurrentVersionTag(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get current version tag: %w", err)
@@ -205,7 +248,7 @@ func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error 
 		currentVersion = "v0.0.0"
 	}
 
-	suggestedVersion, err := versioner.SuggestNextVersion(ctx, currentVersion, commitMsg, cfg.APIKey)
+	suggestedVersion, err := versioner.SuggestNextVersion(ctx, currentVersion, commitMsg, client)
 	if err != nil {
 		return fmt.Errorf("failed to suggest next version: %w", err)
 	}
@@ -225,8 +268,8 @@ func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error 
 }
 
 // runInteractiveSplit launches the interactive UI for splitting diffs into multiple commits.
-func runInteractiveSplit(apiKey string) error {
-	diff, err := git.GetGitDiff()
+func runInteractiveSplit(ctx context.Context, client *gogpt.Client) error {
+	diff, err := git.GetGitDiff(ctx)
 	if err != nil {
 		return err
 	}
@@ -247,7 +290,7 @@ func runInteractiveSplit(apiKey string) error {
 		return nil
 	}
 
-	model := splitter.NewSplitterModel(chunks, apiKey)
+	model := splitter.NewSplitterModel(chunks, client)
 	p := splitter.NewProgram(model)
 	if err := p.Start(); err != nil {
 		return fmt.Errorf("splitter UI error: %w", err)

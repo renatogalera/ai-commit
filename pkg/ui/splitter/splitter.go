@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	gogpt "github.com/sashabaranov/go-openai"
 
 	"github.com/renatogalera/ai-commit/pkg/git"
 	"github.com/renatogalera/ai-commit/pkg/openai"
@@ -42,12 +43,12 @@ type Model struct {
 	spinner      spinner.Model
 	chunks       []git.DiffChunk
 	selected     map[int]bool
-	apiKey       string
+	openAIClient *gogpt.Client
 	commitResult string
 }
 
-// NewSplitterModel creates a new splitter model with the given diff chunks and API key.
-func NewSplitterModel(chunks []git.DiffChunk, apiKey string) Model {
+// NewSplitterModel creates a new splitter model with the given diff chunks and OpenAI client.
+func NewSplitterModel(chunks []git.DiffChunk, client *gogpt.Client) Model {
 	items := make([]list.Item, 0, len(chunks))
 	for _, c := range chunks {
 		items = append(items, chunkItem{Chunk: c})
@@ -62,12 +63,12 @@ func NewSplitterModel(chunks []git.DiffChunk, apiKey string) Model {
 	s.Spinner = spinner.Dot
 
 	return Model{
-		state:    stateList,
-		list:     l,
-		spinner:  s,
-		chunks:   chunks,
-		selected: make(map[int]bool),
-		apiKey:   apiKey,
+		state:        stateList,
+		list:         l,
+		spinner:      s,
+		chunks:       chunks,
+		selected:     make(map[int]bool),
+		openAIClient: client,
 	}
 }
 
@@ -131,7 +132,8 @@ func (m Model) updateCommit() (tea.Model, tea.Cmd) {
 	newModel.state = stateSpinner
 
 	return newModel, func() tea.Msg {
-		if err := partialCommit(m.chunks, m.selected, m.apiKey); err != nil {
+		err := partialCommit(newModel.chunks, newModel.selected, newModel.openAIClient)
+		if err != nil {
 			newModel.commitResult = fmt.Sprintf("Error: %v", err)
 		} else {
 			newModel.commitResult = "Selected chunks committed successfully!"
@@ -150,8 +152,12 @@ func (m Model) updateAutoGroup() (tea.Model, tea.Cmd) {
 }
 
 // partialCommit stages selected diff chunks and commits them with an AI-generated commit message.
-func partialCommit(chunks []git.DiffChunk, selected map[int]bool, apiKey string) error {
-	if err := run("git", "reset"); err != nil {
+func partialCommit(chunks []git.DiffChunk, selected map[int]bool, client *gogpt.Client) error {
+	// Unstage everything first to apply patch exactly as selected.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := runCmd(ctx, "git", "reset"); err != nil {
 		return fmt.Errorf("failed to reset: %w", err)
 	}
 	patch, err := buildPatch(chunks, selected)
@@ -161,25 +167,24 @@ func partialCommit(chunks []git.DiffChunk, selected map[int]bool, apiKey string)
 	if patch == "" {
 		return fmt.Errorf("no chunks selected")
 	}
-	cmd := exec.Command("git", "apply", "--cached", "-")
+
+	cmd := exec.CommandContext(ctx, "git", "apply", "--cached", "-")
 	cmd.Stdin = strings.NewReader(patch)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to apply patch: %w", err)
 	}
-	diff, err := git.GetGitDiff()
+
+	partialDiff, err := git.GetGitDiff(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get partial diff: %w", err)
 	}
-	prompt := buildCommitPrompt(diff)
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	commitMsg, err := openai.GetChatCompletion(ctx, prompt, apiKey)
+	commitMsg, err := generatePartialCommitMessage(ctx, partialDiff, client)
 	if err != nil {
-		return fmt.Errorf("AI error: %w", err)
+		return err
 	}
-	if err := git.CommitChanges(commitMsg); err != nil {
+	if err := git.CommitChanges(ctx, commitMsg); err != nil {
 		return err
 	}
 	return nil
@@ -207,9 +212,9 @@ func buildPatch(chunks []git.DiffChunk, selected map[int]bool) (string, error) {
 	return patch, nil
 }
 
-// buildCommitPrompt creates a prompt for the AI to generate a commit message for the partial diff.
-func buildCommitPrompt(diff string) string {
-	return fmt.Sprintf(`
+// generatePartialCommitMessage uses the user’s partial diff to produce a commit message via OpenAI.
+func generatePartialCommitMessage(ctx context.Context, diff string, client *gogpt.Client) (string, error) {
+	prompt := fmt.Sprintf(`
 Generate a commit message for the following partial diff.
 The commit message must follow the Conventional Commits style.
 Output ONLY the commit message.
@@ -217,10 +222,17 @@ Output ONLY the commit message.
 Diff:
 %s
 `, diff)
+
+	msg, err := openai.GetChatCompletion(ctx, client, prompt)
+	if err != nil {
+		return "", fmt.Errorf("AI error: %w", err)
+	}
+	return strings.TrimSpace(msg), nil
 }
 
-func run(cmdName string, args ...string) error {
-	cmd := exec.Command(cmdName, args...)
+// runCmd executes a command with a context.
+func runCmd(ctx context.Context, cmdName string, args ...string) error {
+	cmd := exec.CommandContext(ctx, cmdName, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
