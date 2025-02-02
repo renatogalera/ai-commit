@@ -98,9 +98,8 @@ Set your API key either via a command-line flag or an environment variable:
 
 - **Command-Line Flag:** `--apiKey YOUR_API_KEY`
 - **Environment Variable:**  
-  ```bash
-  export OPENAI_API_KEY=YOUR_API_KEY
-  ```
+
+export OPENAI_API_KEY=YOUR_API_KEY
 
 ### Custom Templates
 
@@ -114,19 +113,17 @@ Use the `--template` flag to supply a commit message template with placeholders:
 
 For example:
 
-```bash
 ai-commit --template "Branch: {GIT_BRANCH}\nCommit: {COMMIT_MESSAGE}"
-```
 
 ### Semantic Release
 
 To automatically suggest the next version and optionally create & push a Git tag plus run [GoReleaser](https://goreleaser.com/):
 
-1. Install GoReleaser if you haven’t already:
-   ```bash
-   brew install goreleaser/tap/goreleaser
-   ```
-   or see [official installation docs](https://goreleaser.com/install/).
+1. Install GoReleaser if you haven't already:
+
+brew install goreleaser/tap/goreleaser
+
+or see [official installation docs](https://goreleaser.com/install/).
 
 2. Use `--semantic-release` when running AI-Commit. This will:
    - Parse your current version (from the latest `vX.Y.Z` Git tag).
@@ -256,4 +253,4 @@ Adds a relevant emoji to the beginning of your commit message if a recognized co
 
 ## License
 
-This project is released under the [MIT License](LICENSE.md). Please see the LICENSE file for details.
+This project is released under the [MIT License](LICENSE.md). Please see the LICENSE file for details
