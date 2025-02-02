@@ -25,7 +25,6 @@
     - [4. Custom Template](#4-custom-template)
     - [5. Interactive Commit Splitting (Partial Commits)](#5-interactive-commit-splitting-partial-commits)
   - [License](#license)
-
 ---
 
 ## Key Features

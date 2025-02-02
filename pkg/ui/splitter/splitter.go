@@ -1,10 +1,12 @@
 package splitter
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -156,12 +158,9 @@ func (m Model) updateAutoGroup() (tea.Model, tea.Cmd) {
 // 4) uses AI to generate the commit message
 // 5) commits them
 func partialCommit(chunks []git.DiffChunk, selected map[int]bool, apiKey string) error {
-	// 1) reset staged changes
 	if err := run("git", "reset"); err != nil {
 		return fmt.Errorf("failed to reset: %w", err)
 	}
-
-	// 2) build patch from selected chunks
 	patch, err := buildPatch(chunks, selected)
 	if err != nil {
 		return err
@@ -169,8 +168,6 @@ func partialCommit(chunks []git.DiffChunk, selected map[int]bool, apiKey string)
 	if patch == "" {
 		return fmt.Errorf("no chunks selected")
 	}
-
-	// 3) apply patch
 	cmd := exec.Command("git", "apply", "--cached", "-")
 	cmd.Stdin = strings.NewReader(patch)
 	cmd.Stdout = os.Stdout
@@ -178,19 +175,17 @@ func partialCommit(chunks []git.DiffChunk, selected map[int]bool, apiKey string)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to apply patch: %w", err)
 	}
-
-	// 4) generate commit message
 	diff, err := git.GetGitDiff()
 	if err != nil {
 		return fmt.Errorf("failed to get partial diff: %w", err)
 	}
 	prompt := buildCommitPrompt(diff)
-	commitMsg, err := openai.GetChatCompletion(nil, prompt, apiKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	commitMsg, err := openai.GetChatCompletion(ctx, prompt, apiKey)
 	if err != nil {
 		return fmt.Errorf("AI error: %w", err)
 	}
-
-	// 5) create commit
 	if err := git.CommitChanges(commitMsg); err != nil {
 		return err
 	}
