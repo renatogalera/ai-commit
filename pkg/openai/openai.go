@@ -42,7 +42,7 @@ func BuildPrompt(diff, language, commitType string) string {
 	sb.WriteString("The commit message must include a short subject line starting with the commit type (e.g., 'feat: Add new feature'), followed by a blank line, and then a detailed body. ")
 	sb.WriteString("For the body, list each change as a separate bullet point, starting with a hyphen ('-'). ")
 	sb.WriteString("Write using the present tense and ensure clarity. Output only the commit message with no additional text. ")
-	sb.WriteString("Ignore changes to lock files (e.g., go.mod, go.sum). ")
+	sb.WriteString("Ignore changes such as line breaks, blank lines, and information that does not add value to the commit message. ")
 	if commitType != "" {
 		sb.WriteString(fmt.Sprintf("Use the commit type '%s'. ", commitType))
 	}
@@ -70,7 +70,7 @@ func SanitizeOpenAIResponse(msg, commitType string) string {
 	msg = strings.TrimSpace(msg)
 
 	if commitType != "" {
-		pattern := regexp.MustCompile(`^(?:(\p{Emoji_Presentation}|\p{So}|\p{Sk}|:\w+:)\s*)?(` + committypes.TypesRegexPattern() + `):\s*|(` + committypes.TypesRegexPattern() + `):\s*`)
+		pattern := regexp.MustCompile(`^(?:(\p{So}|\p{Sk}|:\w+:)\s*)?(` + committypes.TypesRegexPattern() + `):\s*|(` + committypes.TypesRegexPattern() + `):\s*`)
 		lines := strings.SplitN(msg, "\n", 2)
 		if len(lines) > 0 {
 			lines[0] = pattern.ReplaceAllString(lines[0], "")
