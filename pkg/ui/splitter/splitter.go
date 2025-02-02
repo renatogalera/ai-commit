@@ -16,8 +16,6 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/openai"
 )
 
-// Import context for partialCommit.
-
 // splitterState represents the state of the interactive splitter UI.
 type splitterState int
 
