@@ -47,10 +47,11 @@ type Model struct {
 	template      string
 	selectedIndex int
 	commitTypes   []string
+	enableEmoji   bool
 }
 
 // NewUIModel creates a new UI model with the provided parameters.
-func NewUIModel(commitMsg, prompt, apiKey, commitType, tmpl string) Model {
+func NewUIModel(commitMsg, prompt, apiKey, commitType, tmpl string, enableEmoji bool) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	return Model{
@@ -63,6 +64,7 @@ func NewUIModel(commitMsg, prompt, apiKey, commitType, tmpl string) Model {
 		spinner:       s,
 		selectedIndex: 0,
 		commitTypes:   committypes.AllTypes(),
+		enableEmoji:   enableEmoji,
 	}
 }
 
@@ -91,7 +93,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = stateGenerating
 				m.spinner = spinner.New()
 				m.spinner.Spinner = spinner.Dot
-				return m, regenCmd(m.prompt, m.apiKey, m.commitType, m.template)
+				return m, regenCmd(m.prompt, m.apiKey, m.commitType, m.template, m.enableEmoji)
 			case "q", "ctrl+c":
 				return m, tea.Quit
 			case "t":
@@ -116,7 +118,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = stateGenerating
 				m.spinner = spinner.New()
 				m.spinner.Spinner = spinner.Dot
-				return m, regenCmd(m.prompt, m.apiKey, m.commitType, m.template)
+				return m, regenCmd(m.prompt, m.apiKey, m.commitType, m.template, m.enableEmoji)
 			}
 		case stateResult:
 			return m, tea.Quit
@@ -191,15 +193,15 @@ func commitCmd(commitMsg string) tea.Cmd {
 }
 
 // regenCmd returns a command to regenerate the commit message using OpenAI.
-func regenCmd(prompt, apiKey, commitType, tmpl string) tea.Cmd {
+func regenCmd(prompt, apiKey, commitType, tmpl string, enableEmoji bool) tea.Cmd {
 	return func() tea.Msg {
-		msg, err := regenerate(prompt, apiKey, commitType, tmpl)
+		msg, err := regenerate(prompt, apiKey, commitType, tmpl, enableEmoji)
 		return regenMsg{msg: msg, err: err}
 	}
 }
 
 // regenerate calls the OpenAI API to generate a new commit message.
-func regenerate(prompt, apiKey, commitType, tmpl string) (string, error) {
+func regenerate(prompt, apiKey, commitType, tmpl string, enableEmoji bool) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	result, err := openai.GetChatCompletion(ctx, prompt, apiKey)
@@ -207,7 +209,9 @@ func regenerate(prompt, apiKey, commitType, tmpl string) (string, error) {
 		return "", err
 	}
 	result = openai.SanitizeOpenAIResponse(result, commitType)
-	result = openai.AddGitmoji(result, commitType)
+	if enableEmoji {
+		result = openai.AddGitmoji(result, commitType)
+	}
 	if tmpl != "" {
 		result, err = template.ApplyTemplate(tmpl, result)
 		if err != nil {
