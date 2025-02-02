@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	gogpt "github.com/sashabaranov/go-openai"
+
 	"github.com/renatogalera/ai-commit/pkg/openai"
 )
 
@@ -31,12 +33,13 @@ func GetCurrentVersionTag(ctx context.Context) (string, error) {
 }
 
 // SuggestNextVersion uses OpenAI to suggest the next semantic version based on the commit message.
-func SuggestNextVersion(ctx context.Context, currentVersion, commitMsg, apiKey string) (string, error) {
+// It uses the shared OpenAI client instead of an API key.
+func SuggestNextVersion(ctx context.Context, currentVersion, commitMsg string, client *gogpt.Client) (string, error) {
 	if currentVersion == "" {
 		currentVersion = "v0.0.0"
 	}
 	prompt := buildVersionPrompt(currentVersion, commitMsg)
-	aiResponse, err := openai.GetChatCompletion(ctx, prompt, apiKey)
+	aiResponse, err := openai.GetChatCompletion(ctx, client, prompt)
 	if err != nil {
 		return "", fmt.Errorf("failed to get version suggestion: %w", err)
 	}
@@ -53,14 +56,12 @@ func TagAndPush(ctx context.Context, newVersionTag string) error {
 	if newVersionTag == "" {
 		return errors.New("no version tag provided to TagAndPush")
 	}
-
-	// Create tag.
+	// Create tag
 	cmd := exec.CommandContext(ctx, "git", "tag", newVersionTag)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create tag %s: %w", newVersionTag, err)
 	}
-
-	// Push tag.
+	// Push tag
 	cmd = exec.CommandContext(ctx, "git", "push", "origin", newVersionTag)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to push tag %s: %w", newVersionTag, err)

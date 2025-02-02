@@ -10,6 +10,10 @@ var validTypes = []string{
 	"feat", "fix", "docs", "style", "refactor", "test", "chore", "perf", "build", "ci",
 }
 
+// typeWithEmojiPattern precompiles the regex used to match
+// an optional emoji, a valid commit type, an optional scope, and a colon.
+var typeWithEmojiPattern = regexp.MustCompile(`^((\p{So}|\p{Sk}|:\w+:)\s*)?(` + strings.Join(validTypes, "|") + `)(\([^)]+\))?:`)
+
 // IsValidCommitType checks if the provided commit type is in the list of valid types.
 func IsValidCommitType(t string) bool {
 	for _, vt := range validTypes {
@@ -25,26 +29,13 @@ func AllTypes() []string {
 	return validTypes
 }
 
-// TypesRegexPattern joins all valid types for use in a regex pattern.
+// TypesRegexPattern returns a string that can be used to match valid commit types in a regex.
 func TypesRegexPattern() string {
 	return strings.Join(validTypes, "|")
 }
 
-// BuildRegexPatternWithEmoji builds a regex pattern that matches a conventional commit
-// type with an optional emoji and optional scope before the colon.
-//
-// Example commits that will match:
-//
-//	"feat: Something"
-//	"feat(README): Something"
-//	"✨ feat: Something"
-//	"🐛 fix(core): Something"
+// BuildRegexPatternWithEmoji returns a precompiled regex that matches
+// the Conventional Commit type with an optional emoji and scope.
 func BuildRegexPatternWithEmoji() *regexp.Regexp {
-	// Explanation of capture groups:
-	// 1) ^((\p{So}|\p{Sk}|:\w+:)\s*)?  = optional emoji
-	// 2) (feat|fix|docs|style|...)     = the recognized commit type
-	// 3) (\([^)]+\))?                  = optional (scope)
-	// 4) :                             = literal colon
-	pattern := `^((\p{So}|\p{Sk}|:\w+:)\s*)?(` + TypesRegexPattern() + `)(\([^)]+\))?:`
-	return regexp.MustCompile(pattern)
+	return typeWithEmojiPattern
 }

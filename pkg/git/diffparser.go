@@ -4,12 +4,14 @@ import (
 	"strings"
 )
 
+// DiffChunk represents a single "hunk" within a diff for a particular file.
 type DiffChunk struct {
 	FilePath   string
 	HunkHeader string
 	Lines      []string
 }
 
+// ParseDiffToChunks splits a unified diff into a list of DiffChunk structs.
 func ParseDiffToChunks(diff string) ([]DiffChunk, error) {
 	lines := strings.Split(diff, "\n")
 	var chunks []DiffChunk
@@ -56,6 +58,7 @@ func ParseDiffToChunks(diff string) ([]DiffChunk, error) {
 	return chunks, nil
 }
 
+// parseFilePath attempts to parse the file path from a diff --git line.
 func parseFilePath(diffLine string) string {
 	parts := strings.Split(diffLine, " ")
 	if len(parts) < 4 {
