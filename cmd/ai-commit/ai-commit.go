@@ -127,7 +127,8 @@ func main() {
 		fmt.Println("Note: The diff was truncated for brevity.")
 	}
 
-	prompt := openai.BuildPrompt(diff, *languageFlag, *commitTypeFlag)
+	// Build initial prompt (new signature includes extra prompt = "")
+	prompt := openai.BuildPrompt(diff, *languageFlag, *commitTypeFlag, "")
 
 	// Prepare local config.
 	cfg := Config{
@@ -177,6 +178,8 @@ func main() {
 	// If we are here, we launch the interactive TUI for commit confirmation/regeneration.
 	model := ui.NewUIModel(
 		commitMsg,
+		diff,          // store the diff
+		*languageFlag, // store the language
 		cfg.Prompt,
 		cfg.CommitType,
 		cfg.Template,

@@ -39,8 +39,9 @@ func GetChatCompletion(ctx context.Context, client *gogpt.Client, prompt string)
 	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }
 
-// BuildPrompt constructs the prompt for the OpenAI API based on the diff, language, and commit type.
-func BuildPrompt(diff, language, commitType string) string {
+// BuildPrompt constructs the prompt for the OpenAI API based on the diff, language, commit type,
+// and allows an additional custom text appended at the end if desired.
+func BuildPrompt(diff, language, commitType, additionalText string) string {
 	var sb strings.Builder
 	sb.WriteString("Generate a git commit message following these rules:\n")
 	sb.WriteString("- Use Conventional Commits (type(scope?): description).\n")
@@ -56,6 +57,13 @@ func BuildPrompt(diff, language, commitType string) string {
 	sb.WriteString(fmt.Sprintf("- Write the message in %s.\n", language))
 	sb.WriteString("Here is the diff:\n\n")
 	sb.WriteString(diff)
+
+	// If user wants to add custom prompt text, add it at the end.
+	if additionalText != "" {
+		sb.WriteString("\n\n[Additional context provided by user]\n")
+		sb.WriteString(additionalText)
+	}
+
 	return sb.String()
 }
 
@@ -91,9 +99,10 @@ func SanitizeOpenAIResponse(msg, commitType string) string {
 	return msg
 }
 
-// AddGitmoji prepends an emoji (if applicable) to the commit message based on the commit type.
-// Falls back to guess a commit type if not provided, but will skip if no match is found.
+// AddGitmoji prepends an emoji to the commit message based on the commit type.
+// If a conventional prefix is detected, it will be replaced with a new prefix.
 func AddGitmoji(message, commitType string) string {
+	// If commitType is empty, attempt to guess it from the message content.
 	if commitType == "" {
 		lowerMsg := strings.ToLower(message)
 		switch {
@@ -118,6 +127,7 @@ func AddGitmoji(message, commitType string) string {
 		}
 	}
 
+	// If we still don't have a commit type, return the message as is.
 	if commitType == "" {
 		return message
 	}
@@ -140,12 +150,12 @@ func AddGitmoji(message, commitType string) string {
 		prefix = fmt.Sprintf("%s %s", emoji, commitType)
 	}
 
-	// Check if the message already starts with a recognized pattern (type/emoji).
+	// Build a regex that detects an existing conventional commit prefix.
 	emojiPattern := committypes.BuildRegexPatternWithEmoji()
-	matches := emojiPattern.FindStringSubmatch(message)
-	if len(matches) > 0 {
-		// There's already a leading pattern, skip adding a new prefix
-		return message
+	if matches := emojiPattern.FindStringSubmatch(message); len(matches) > 0 {
+		// Remove the existing prefix before adding the new one.
+		cleanMsg := emojiPattern.ReplaceAllString(message, "")
+		return fmt.Sprintf("%s: %s", prefix, strings.TrimSpace(cleanMsg))
 	}
 
 	return fmt.Sprintf("%s: %s", prefix, message)
