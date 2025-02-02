@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	gogpt "github.com/sashabaranov/go-openai"
 
@@ -20,11 +21,12 @@ import (
 type uiState int
 
 const (
-	stateShowCommit uiState = iota
-	stateGenerating
-	stateCommitting
-	stateResult
-	stateSelectType
+	stateShowCommit uiState = iota // Shows generated commit
+	stateGenerating                // Shows spinner while generating a new commit
+	stateCommitting                // Shows spinner while committing
+	stateResult                    // Shows final result or error
+	stateSelectType                // Allows selecting commit type
+	stateEditing                   // Allows editing the commit message
 )
 
 // commitResultMsg is returned when a commit attempt finishes.
@@ -53,6 +55,9 @@ type Model struct {
 	commitTypes   []string
 	regenCount    int
 	maxRegens     int
+
+	// Text area for editing the commit message
+	textarea textarea.Model
 }
 
 // NewUIModel creates a new UI model with the provided parameters.
@@ -66,6 +71,15 @@ func NewUIModel(
 ) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
+
+	ta := textarea.New()
+	ta.Placeholder = "Edit your commit message here"
+	ta.Prompt = "> "
+	ta.CharLimit = 0 // No character limit
+	ta.SetWidth(50)
+	ta.SetHeight(10)
+	ta.ShowLineNumbers = false
+
 	return Model{
 		state:         stateShowCommit,
 		commitMsg:     commitMsg,
@@ -79,6 +93,7 @@ func NewUIModel(
 		commitTypes:   committypes.AllTypes(),
 		regenCount:    0,
 		maxRegens:     3, // Limit the user to 3 regenerations
+		textarea:      ta,
 	}
 }
 
@@ -95,19 +110,23 @@ func NewProgram(model Model) *tea.Program {
 // Update updates the UI model based on messages from Bubble Tea.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch m.state {
+		//----------------------------------------------------------------------
+		// MAIN SCREEN: stateShowCommit
+		//----------------------------------------------------------------------
 		case stateShowCommit:
 			switch msg.String() {
 			case "y", "enter":
 				// User confirms commit
 				m.state = stateCommitting
 				return m, commitCmd(m.commitMsg)
+
 			case "r":
 				// User wants to regenerate
 				if m.regenCount >= m.maxRegens {
-					// Already at limit
 					m.result = fmt.Sprintf("Max regenerations (%d) reached. No more regenerations allowed.", m.maxRegens)
 					m.state = stateResult
 					return m, nil
@@ -117,12 +136,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinner.Spinner = spinner.Dot
 				m.regenCount++
 				return m, regenCmd(m.openAIClient, m.prompt, m.commitType, m.template, m.enableEmoji)
+
 			case "q", "ctrl+c":
 				return m, tea.Quit
+
 			case "t":
+				// User wants to select commit type
 				m.state = stateSelectType
 				return m, nil
+
+			case "e":
+				// User wants to edit the commit message
+				m.state = stateEditing
+				// Fill textarea with current commit message
+				m.textarea.SetValue(m.commitMsg)
+				m.textarea.Focus()
+				return m, nil
 			}
+
+		//----------------------------------------------------------------------
+		// SELECT TYPE SCREEN: stateSelectType
+		//----------------------------------------------------------------------
 		case stateSelectType:
 			switch msg.String() {
 			case "q", "ctrl+c":
@@ -137,6 +171,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedIndex++
 				}
 			case "enter":
+				// Apply commit type, then regenerate
 				m.commitType = m.commitTypes[m.selectedIndex]
 				m.state = stateGenerating
 				m.spinner = spinner.New()
@@ -144,10 +179,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.regenCount++
 				return m, regenCmd(m.openAIClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 			}
+
+		//----------------------------------------------------------------------
+		// EDITING SCREEN: stateEditing
+		//----------------------------------------------------------------------
+		case stateEditing:
+			// Pass the keypress to the textarea
+			var tcmd tea.Cmd
+			m.textarea, tcmd = m.textarea.Update(msg)
+			cmd = tea.Batch(cmd, tcmd)
+
+			switch msg.String() {
+			case "esc":
+				// Discard changes and return
+				m.state = stateShowCommit
+				return m, cmd
+
+			case "ctrl+s":
+				// Save changes and return to main screen
+				m.commitMsg = m.textarea.Value()
+				m.state = stateShowCommit
+				return m, cmd
+			}
+
+		//----------------------------------------------------------------------
+		// RESULT SCREEN: stateResult
+		//----------------------------------------------------------------------
 		case stateResult:
 			return m, tea.Quit
 		}
+
+	//----------------------------------------------------------------------
+	// SPINNER MESSAGES AND OTHERS
+	//----------------------------------------------------------------------
 	case regenMsg:
+		// Result from regenerate
 		if msg.err != nil {
 			m.result = fmt.Sprintf("Error generating commit message: %v", msg.err)
 			m.state = stateResult
@@ -155,13 +221,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.commitMsg = msg.msg
 			m.state = stateShowCommit
 		}
+
 	case commitResultMsg:
+		// Result from commit command
 		if msg.err != nil {
 			m.result = fmt.Sprintf("Commit failed: %v", msg.err)
 		} else {
 			m.result = "Commit created successfully!"
 		}
 		m.state = stateResult
+
 	case spinner.TickMsg:
 		// Update spinner during generating or committing states
 		if m.state == stateGenerating || m.state == stateCommitting {
@@ -169,8 +238,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
-	newModel, cmd := m.updateList(msg)
-	return newModel, cmd
+
+	// We might have sub-updates that return commands
+	newModel, subCmd := m.updateList(msg)
+	return newModel, tea.Batch(cmd, subCmd)
 }
 
 // updateList is a helper function that could update an internal list if used.
@@ -183,15 +254,19 @@ func (m Model) View() string {
 	switch m.state {
 	case stateShowCommit:
 		return fmt.Sprintf(
-			"%s\n\nPress 'y' to commit, 'r' to regenerate,\n't' to change commit type, or 'q' to quit",
+			"%s\n\nPress 'y' to commit, 'r' to regenerate,\n'e' to edit message, 't' to change commit type,\nor 'q' to quit.",
 			m.commitMsg,
 		)
+
 	case stateGenerating:
 		return fmt.Sprintf("Generating commit message... %s", m.spinner.View())
+
 	case stateCommitting:
 		return fmt.Sprintf("Committing... %s", m.spinner.View())
+
 	case stateResult:
 		return m.result
+
 	case stateSelectType:
 		var b strings.Builder
 		b.WriteString("Select commit type:\n\n")
@@ -204,6 +279,13 @@ func (m Model) View() string {
 		}
 		b.WriteString("\nUse up/down arrows (or j/k) to navigate, enter to select,\n'q' to go back.\n")
 		return b.String()
+
+	case stateEditing:
+		// Show the text area for editing
+		return fmt.Sprintf(
+			"Editing commit message (Press ESC to discard, Ctrl+S to save):\n\n%s",
+			m.textarea.View(),
+		)
 	}
 	return ""
 }
