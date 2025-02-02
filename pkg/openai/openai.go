@@ -39,15 +39,18 @@ func GetChatCompletion(ctx context.Context, prompt, apiKey string) (string, erro
 // BuildPrompt constructs the prompt for the OpenAI API based on the diff, language, and commit type.
 func BuildPrompt(diff, language, commitType string) string {
 	var sb strings.Builder
-	sb.WriteString("Generate a git commit message following the Conventional Commits specification. ")
-	sb.WriteString("The commit message must include a short subject line starting with the commit type (e.g., 'feat: Add new feature'), followed by a blank line, and then a detailed body. ")
-	sb.WriteString("For the body, list each change as a separate bullet point, starting with a hyphen ('-'). ")
-	sb.WriteString("Write using the present tense and ensure clarity. Output only the commit message with no additional text. ")
-	sb.WriteString("Ignore changes such as line breaks, blank lines, and information that does not add value to the commit message. ")
-	if commitType != "" {
-		sb.WriteString(fmt.Sprintf("Use the commit type '%s'. ", commitType))
+	sb.WriteString("Generate a git commit message following these rules:\n")
+	sb.WriteString("- Use Conventional Commits (type(scope?): description).\n")
+	sb.WriteString("- Keep the subject line concise (ideally under 50 characters), in the imperative mood.\n")
+	sb.WriteString("- If breaking changes exist, add 'BREAKING CHANGE:' in the body.\n")
+	sb.WriteString("- After the subject line, add a blank line, then bullet points describing changes with '- '.\n")
+	sb.WriteString("- Omit disclaimers, code blocks, or references to AI.\n")
+	sb.WriteString("- Use the present tense and ensure clarity.\n")
+	sb.WriteString("- Output only the commit message.\n")
+	if commitType != "" && committypes.IsValidCommitType(commitType) {
+		sb.WriteString(fmt.Sprintf("- Use the commit type '%s'.\n", commitType))
 	}
-	sb.WriteString(fmt.Sprintf("Write the message in %s. ", language))
+	sb.WriteString(fmt.Sprintf("- Write the message in %s.\n", language))
 	sb.WriteString("Here is the diff:\n\n")
 	sb.WriteString(diff)
 	return sb.String()
