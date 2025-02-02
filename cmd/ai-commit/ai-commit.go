@@ -34,7 +34,6 @@ const defaultTimeout = 60 * time.Second
 // entire struct.
 type Config struct {
 	Prompt           string
-	APIKey           string
 	CommitType       string
 	Template         string
 	SemanticRelease  bool
@@ -133,7 +132,6 @@ func main() {
 	// Prepare local config.
 	cfg := Config{
 		Prompt:          prompt,
-		APIKey:          apiKey,
 		CommitType:      *commitTypeFlag,
 		Template:        *templateFlag,
 		SemanticRelease: *semanticReleaseFlag,
