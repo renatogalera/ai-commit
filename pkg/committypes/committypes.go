@@ -30,8 +30,21 @@ func TypesRegexPattern() string {
 	return strings.Join(validTypes, "|")
 }
 
-// BuildRegexPatternWithEmoji builds a regex pattern that matches conventional commit messages with an optional emoji.
+// BuildRegexPatternWithEmoji builds a regex pattern that matches a conventional commit
+// type with an optional emoji and optional scope before the colon.
+//
+// Example commits that will match:
+//
+//	"feat: Something"
+//	"feat(README): Something"
+//	"✨ feat: Something"
+//	"🐛 fix(core): Something"
 func BuildRegexPatternWithEmoji() *regexp.Regexp {
-	pattern := `^((\p{So}|\p{Sk}|:\w+:)\s*)?(` + TypesRegexPattern() + `):`
+	// Explanation of capture groups:
+	// 1) ^((\p{So}|\p{Sk}|:\w+:)\s*)?  = optional emoji
+	// 2) (feat|fix|docs|style|...)     = the recognized commit type
+	// 3) (\([^)]+\))?                  = optional (scope)
+	// 4) :                             = literal colon
+	pattern := `^((\p{So}|\p{Sk}|:\w+:)\s*)?(` + TypesRegexPattern() + `)(\([^)]+\))?:`
 	return regexp.MustCompile(pattern)
 }
