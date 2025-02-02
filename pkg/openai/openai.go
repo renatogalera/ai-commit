@@ -17,7 +17,7 @@ func GetChatCompletion(ctx context.Context, prompt, apiKey string) (string, erro
 	client := gogpt.NewClient(apiKey)
 
 	req := gogpt.ChatCompletionRequest{
-		Model: gogpt.GPT4,
+		Model: gogpt.GPT4oLatest,
 		Messages: []gogpt.ChatCompletionMessage{
 			{
 				Role:    gogpt.ChatMessageRoleUser,
