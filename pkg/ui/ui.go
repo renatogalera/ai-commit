@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	gogpt "github.com/sashabaranov/go-openai"
 
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/git"
@@ -15,7 +16,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/template"
 )
 
-// uiState represents the different states of the UI.
+// uiState represents the different states of the TUI.
 type uiState int
 
 const (
@@ -26,45 +27,58 @@ const (
 	stateSelectType
 )
 
+// commitResultMsg is returned when a commit attempt finishes.
 type commitResultMsg struct {
 	err error
 }
 
+// regenMsg is returned when an OpenAI regeneration finishes.
 type regenMsg struct {
 	msg string
 	err error
 }
 
-// Model defines the state for the UI.
+// Model defines the state for the TUI.
 type Model struct {
 	state         uiState
 	commitMsg     string
 	result        string
 	spinner       spinner.Model
 	prompt        string
-	apiKey        string
 	commitType    string
 	template      string
+	enableEmoji   bool
+	openAIClient  *gogpt.Client
 	selectedIndex int
 	commitTypes   []string
-	enableEmoji   bool
+	regenCount    int
+	maxRegens     int
 }
 
 // NewUIModel creates a new UI model with the provided parameters.
-func NewUIModel(commitMsg, prompt, apiKey, commitType, tmpl string, enableEmoji bool) Model {
+func NewUIModel(
+	commitMsg string,
+	prompt string,
+	commitType string,
+	tmpl string,
+	enableEmoji bool,
+	client *gogpt.Client,
+) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	return Model{
 		state:         stateShowCommit,
 		commitMsg:     commitMsg,
 		prompt:        prompt,
-		apiKey:        apiKey,
 		commitType:    commitType,
 		template:      tmpl,
+		enableEmoji:   enableEmoji,
+		openAIClient:  client,
 		spinner:       s,
 		selectedIndex: 0,
 		commitTypes:   committypes.AllTypes(),
-		enableEmoji:   enableEmoji,
+		regenCount:    0,
+		maxRegens:     3, // Limit the user to 3 regenerations
 	}
 }
 
@@ -87,13 +101,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case stateShowCommit:
 			switch msg.String() {
 			case "y", "enter":
+				// User confirms commit
 				m.state = stateCommitting
 				return m, commitCmd(m.commitMsg)
 			case "r":
+				// User wants to regenerate
+				if m.regenCount >= m.maxRegens {
+					// Already at limit
+					m.result = fmt.Sprintf("Max regenerations (%d) reached. No more regenerations allowed.", m.maxRegens)
+					m.state = stateResult
+					return m, nil
+				}
 				m.state = stateGenerating
 				m.spinner = spinner.New()
 				m.spinner.Spinner = spinner.Dot
-				return m, regenCmd(m.prompt, m.apiKey, m.commitType, m.template, m.enableEmoji)
+				m.regenCount++
+				return m, regenCmd(m.openAIClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 			case "q", "ctrl+c":
 				return m, tea.Quit
 			case "t":
@@ -118,7 +141,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = stateGenerating
 				m.spinner = spinner.New()
 				m.spinner.Spinner = spinner.Dot
-				return m, regenCmd(m.prompt, m.apiKey, m.commitType, m.template, m.enableEmoji)
+				m.regenCount++
+				return m, regenCmd(m.openAIClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 			}
 		case stateResult:
 			return m, tea.Quit
@@ -139,17 +163,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.state = stateResult
 	case spinner.TickMsg:
+		// Update spinner during generating or committing states
 		if m.state == stateGenerating || m.state == stateCommitting {
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
 		}
 	}
-	newList, cmd := m.updateList(msg)
-	m = newList.(Model)
-	return m, cmd
+	newModel, cmd := m.updateList(msg)
+	return newModel, cmd
 }
 
-// updateList is a helper function to update the list component if needed.
+// updateList is a helper function that could update an internal list if used.
 func (m Model) updateList(_ tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
@@ -187,24 +211,40 @@ func (m Model) View() string {
 // commitCmd returns a Bubble Tea command to commit changes with the provided commit message.
 func commitCmd(commitMsg string) tea.Cmd {
 	return func() tea.Msg {
-		err := git.CommitChanges(commitMsg)
+		// Use a short context for commit
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		err := git.CommitChanges(ctx, commitMsg)
 		return commitResultMsg{err: err}
 	}
 }
 
 // regenCmd returns a command to regenerate the commit message using OpenAI.
-func regenCmd(prompt, apiKey, commitType, tmpl string, enableEmoji bool) tea.Cmd {
+func regenCmd(
+	client *gogpt.Client,
+	prompt string,
+	commitType string,
+	tmpl string,
+	enableEmoji bool,
+) tea.Cmd {
 	return func() tea.Msg {
-		msg, err := regenerate(prompt, apiKey, commitType, tmpl, enableEmoji)
+		msg, err := regenerate(prompt, client, commitType, tmpl, enableEmoji)
 		return regenMsg{msg: msg, err: err}
 	}
 }
 
 // regenerate calls the OpenAI API to generate a new commit message.
-func regenerate(prompt, apiKey, commitType, tmpl string, enableEmoji bool) (string, error) {
+func regenerate(
+	prompt string,
+	client *gogpt.Client,
+	commitType string,
+	tmpl string,
+	enableEmoji bool,
+) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	result, err := openai.GetChatCompletion(ctx, prompt, apiKey)
+
+	result, err := openai.GetChatCompletion(ctx, client, prompt)
 	if err != nil {
 		return "", err
 	}
