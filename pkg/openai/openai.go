@@ -83,19 +83,38 @@ func MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
 
 // SanitizeOpenAIResponse cleans the OpenAI response by removing code fences and
 // removing any leading Conventional Commit tokens if the user already specified a type.
+// It also strips any leading "git" token that sometimes appears in the first line.
 func SanitizeOpenAIResponse(msg, commitType string) string {
+	// Remove code fences
 	msg = strings.ReplaceAll(msg, "```", "")
 	msg = strings.TrimSpace(msg)
 
-	// If commitType is non-empty, remove any raw "type: " prefix from the user-provided message.
-	if commitType != "" {
-		lines := strings.SplitN(msg, "\n", 2)
-		if len(lines) > 0 {
+	lines := strings.Split(msg, "\n")
+	if len(lines) > 0 {
+		// If the first line starts with "git", remove it.
+		// E.g. "git ", "git:", "git-"
+		possibleGitPrefix := strings.ToLower(strings.TrimSpace(lines[0]))
+		if strings.HasPrefix(possibleGitPrefix, "git") {
+			// Remove only the "git" plus any trailing space/colon/dash
+			// so we don't nuke the rest of the line.
+			clean := strings.TrimSpace(
+				strings.TrimPrefix(
+					strings.TrimPrefix(lines[0], "git"),
+					":",
+				),
+			)
+			lines[0] = clean
+		}
+
+		// If commitType is non-empty, remove any raw type prefix from the first line.
+		if commitType != "" {
 			lines[0] = sanitizePattern.ReplaceAllString(lines[0], "")
 		}
-		msg = strings.Join(lines, "\n")
-		msg = strings.TrimSpace(msg)
 	}
+
+	msg = strings.Join(lines, "\n")
+	msg = strings.TrimSpace(msg)
+
 	return msg
 }
 
