@@ -1,28 +1,28 @@
-name: Release
+# name: Release
 
-on:
-  push:
-    tags:
-      - 'v*.*.*'
+# on:
+#   push:
+#     tags:
+#       - 'v*.*.*'
 
-jobs:
-  release:
-    runs-on: ubuntu-latest
+# jobs:
+#   release:
+#     runs-on: ubuntu-latest
 
-    steps:
-      - name: Repository Checkout
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Repository Checkout
+#         uses: actions/checkout@v4
 
-      - name: ConfigureGo
-        uses: actions/setup-go@v5
-        with:
-          go-version: stable
+#       - name: ConfigureGo
+#         uses: actions/setup-go@v5
+#         with:
+#           go-version: stable
 
-      - name: Install GoReleaser
-        uses: goreleaser/goreleaser-action@v5
-        with:
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       - name: Install GoReleaser
+#         uses: goreleaser/goreleaser-action@v5
+#         with:
+#           version: latest
+#           args: release --clean
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
