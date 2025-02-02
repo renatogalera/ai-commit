@@ -1,38 +1,56 @@
 package git
 
 import (
-	"errors"
+	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 )
 
+func runCommandContext(ctx context.Context, cmdName string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, cmdName, args...)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to run %s: %w", cmdName, err)
+	}
+	return string(output), nil
+}
+
+func runCommand(cmdName string, args ...string) (string, error) {
+	return runCommandContext(context.Background(), cmdName, args...)
+}
+
 func CheckGitRepository() bool {
-	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
-	out, err := cmd.Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := runCommandContext(ctx, "git", "rev-parse", "--is-inside-work-tree")
 	if err != nil {
 		return false
 	}
-	return strings.TrimSpace(string(out)) == "true"
+	return strings.TrimSpace(out) == "true"
 }
 
 func GetGitDiff() (string, error) {
-	cmd := exec.Command("git", "diff", "--staged")
-	out, err := cmd.Output()
+	return runCommand("git", "diff", "--staged")
+}
+
+func GetHeadCommitMessage() (string, error) {
+	out, err := runCommand("git", "log", "-1", "--pretty=%B")
 	if err != nil {
 		return "", err
 	}
-	return string(out), nil
+	return strings.TrimSpace(out), nil
 }
 
 func GetCurrentBranch() (string, error) {
-	cmd := exec.Command("git", "branch", "--show-current")
-	out, err := cmd.Output()
+	out, err := runCommand("git", "branch", "--show-current")
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	return strings.TrimSpace(out), nil
 }
 
 func FilterLockFiles(diff string, lockFiles []string) string {
@@ -75,7 +93,7 @@ func CommitChanges(commitMessage string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return errors.New("failed to commit changes: " + err.Error())
+		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 	return nil
 }

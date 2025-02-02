@@ -6,6 +6,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/git"
 )
 
+// ApplyTemplate replaces placeholders in the template with actual values.
 func ApplyTemplate(templateStr, commitMessage string) (string, error) {
 	result := templateStr
 	if strings.Contains(result, "{COMMIT_MESSAGE}") {
