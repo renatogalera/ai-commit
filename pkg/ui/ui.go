@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -181,7 +183,9 @@ func regenCmd(prompt, apiKey, commitType, tmpl string) tea.Cmd {
 }
 
 func regenerate(prompt, apiKey, commitType, tmpl string) (string, error) {
-	result, err := openai.GetChatCompletion(nil, prompt, apiKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	result, err := openai.GetChatCompletion(ctx, prompt, apiKey)
 	if err != nil {
 		return "", err
 	}
