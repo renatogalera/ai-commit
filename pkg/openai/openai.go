@@ -12,8 +12,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 )
 
-// sanitizePattern is a precompiled regex that removes the conventional commit
-// prefix if it exists. We build it dynamically using valid commit types.
+// We'll remove the old "git" strip logic and rely on the prompt instructions.
 var sanitizePattern = regexp.MustCompile(`^(?:(\p{So}|\p{Sk}|:\w+:)\s*)?(` + committypes.TypesRegexPattern() + `)(\([^)]+\))?:\s*`)
 
 // GetChatCompletion calls the OpenAI API using a shared *gogpt.Client
@@ -39,10 +38,10 @@ func GetChatCompletion(ctx context.Context, client *gogpt.Client, prompt string)
 	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }
 
-// BuildPrompt constructs the prompt for the OpenAI API based on the diff, language, commit type,
-// and allows an additional custom text appended at the end if desired.
+// BuildPrompt includes an extra rule about not starting with "git".
 func BuildPrompt(diff, language, commitType, additionalText string) string {
 	var sb strings.Builder
+
 	sb.WriteString("Generate a git commit message following these rules:\n")
 	sb.WriteString("- Use Conventional Commits (type(scope?): description).\n")
 	sb.WriteString("- Keep the subject line concise (ideally under 50 characters), in the imperative mood.\n")
@@ -51,14 +50,18 @@ func BuildPrompt(diff, language, commitType, additionalText string) string {
 	sb.WriteString("- Omit disclaimers, code blocks, or references to AI.\n")
 	sb.WriteString("- Use the present tense and ensure clarity.\n")
 	sb.WriteString("- Output only the commit message.\n")
+
+	// NEW RULE: no "git" at the start
+	sb.WriteString("- Do NOT begin your commit message with the word 'git' or references to it.\n")
+
 	if commitType != "" && committypes.IsValidCommitType(commitType) {
 		sb.WriteString(fmt.Sprintf("- Use the commit type '%s'.\n", commitType))
 	}
 	sb.WriteString(fmt.Sprintf("- Write the message in %s.\n", language))
+
 	sb.WriteString("Here is the diff:\n\n")
 	sb.WriteString(diff)
 
-	// If user wants to add custom prompt text, add it at the end.
 	if additionalText != "" {
 		sb.WriteString("\n\n[Additional context provided by user]\n")
 		sb.WriteString(additionalText)
@@ -82,46 +85,27 @@ func MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
 }
 
 // SanitizeOpenAIResponse cleans the OpenAI response by removing code fences and
-// removing any leading Conventional Commit tokens if the user already specified a type.
-// It also strips any leading "git" token that sometimes appears in the first line.
+// any leading conventional-commit token if we already have a commit type.
 func SanitizeOpenAIResponse(msg, commitType string) string {
 	// Remove code fences
 	msg = strings.ReplaceAll(msg, "```", "")
 	msg = strings.TrimSpace(msg)
 
-	lines := strings.Split(msg, "\n")
-	if len(lines) > 0 {
-		// If the first line starts with "git", remove it.
-		// E.g. "git ", "git:", "git-"
-		possibleGitPrefix := strings.ToLower(strings.TrimSpace(lines[0]))
-		if strings.HasPrefix(possibleGitPrefix, "git") {
-			// Remove only the "git" plus any trailing space/colon/dash
-			// so we don't nuke the rest of the line.
-			clean := strings.TrimSpace(
-				strings.TrimPrefix(
-					strings.TrimPrefix(lines[0], "git"),
-					":",
-				),
-			)
-			lines[0] = clean
-		}
-
-		// If commitType is non-empty, remove any raw type prefix from the first line.
-		if commitType != "" {
+	// If a commitType was specified, remove any raw type prefix in the first line.
+	if commitType != "" {
+		lines := strings.SplitN(msg, "\n", 2)
+		if len(lines) > 0 {
 			lines[0] = sanitizePattern.ReplaceAllString(lines[0], "")
 		}
+		msg = strings.Join(lines, "\n")
 	}
 
-	msg = strings.Join(lines, "\n")
-	msg = strings.TrimSpace(msg)
-
-	return msg
+	return strings.TrimSpace(msg)
 }
 
 // AddGitmoji prepends an emoji to the commit message based on the commit type.
-// If a conventional prefix is detected, it will be replaced with a new prefix.
 func AddGitmoji(message, commitType string) string {
-	// If commitType is empty, attempt to guess it from the message content.
+	// If commitType is empty, attempt to guess from the message
 	if commitType == "" {
 		lowerMsg := strings.ToLower(message)
 		switch {
@@ -146,12 +130,11 @@ func AddGitmoji(message, commitType string) string {
 		}
 	}
 
-	// If we still don't have a commit type, return the message as is.
 	if commitType == "" {
 		return message
 	}
 
-	// Map each commit type to an emoji.
+	// Map each commit type to an emoji
 	gitmojis := map[string]string{
 		"feat":     "✨",
 		"fix":      "🐛",
@@ -169,10 +152,9 @@ func AddGitmoji(message, commitType string) string {
 		prefix = fmt.Sprintf("%s %s", emoji, commitType)
 	}
 
-	// Build a regex that detects an existing conventional commit prefix.
+	// Build a regex to detect an existing conventional commit prefix
 	emojiPattern := committypes.BuildRegexPatternWithEmoji()
 	if matches := emojiPattern.FindStringSubmatch(message); len(matches) > 0 {
-		// Remove the existing prefix before adding the new one.
 		cleanMsg := emojiPattern.ReplaceAllString(message, "")
 		return fmt.Sprintf("%s: %s", prefix, strings.TrimSpace(cleanMsg))
 	}
