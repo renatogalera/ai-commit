@@ -11,6 +11,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"errors"
+
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/git"
 	"github.com/renatogalera/ai-commit/pkg/openai"
@@ -70,8 +72,6 @@ func main() {
 		}
 		// After successful interactive splitting, we can optionally do semantic release
 		if *semanticReleaseFlag {
-			// In a real scenario, you might gather final messages or read the last commit message
-			// For demonstration, we'll just look at the HEAD commit message
 			headMsg, _ := git.GetHeadCommitMessage()
 			cfg := Config{
 				APIKey:          apiKey,
@@ -153,6 +153,10 @@ func main() {
 	model := ui.NewUIModel(commitMsg, cfg.Prompt, cfg.APIKey, cfg.CommitType, cfg.Template)
 	p := ui.NewProgram(model)
 	if err := p.Start(); err != nil {
+		// If the error is due to a normal cancellation, do not treat it as a failure.
+		if errors.Is(err, context.Canceled) {
+			os.Exit(0)
+		}
 		log.Error().Err(err).Msg("Error running TUI program")
 		os.Exit(1)
 	}
@@ -181,7 +185,6 @@ func generateCommitMessage(ctx context.Context, cfg Config) (string, error) {
 	return msg, nil
 }
 
-// doSemanticRelease triggers the version suggestion logic and optionally tags/releases
 func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error {
 	log.Info().Msg("Starting semantic release process...")
 	currentVersion, err := versioner.GetCurrentVersionTag()
@@ -212,22 +215,18 @@ func doSemanticRelease(ctx context.Context, cfg Config, commitMsg string) error 
 	return nil
 }
 
-// runInteractiveSplit is the main entry point for chunk-based splitting
 func runInteractiveSplit(apiKey string) error {
-	// We'll parse the staged diff into chunks, then run a TUI to let the user pick splits
 	diff, err := git.GetGitDiff()
 	if err != nil {
 		return err
 	}
 
-	// Filter out lock files
 	diff = git.FilterLockFiles(diff, []string{"go.mod", "go.sum"})
 	if strings.TrimSpace(diff) == "" {
 		fmt.Println("No changes to commit (after filtering lock files). Did you stage your changes?")
 		return nil
 	}
 
-	// We'll parse the diff into chunks
 	chunks, err := git.ParseDiffToChunks(diff)
 	if err != nil {
 		return fmt.Errorf("failed to parse diff: %w", err)
