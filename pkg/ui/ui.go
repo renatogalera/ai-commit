@@ -15,6 +15,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/template"
 )
 
+// uiState represents the different states of the UI.
 type uiState int
 
 const (
@@ -34,6 +35,7 @@ type regenMsg struct {
 	err error
 }
 
+// Model defines the state for the UI.
 type Model struct {
 	state         uiState
 	commitMsg     string
@@ -47,6 +49,7 @@ type Model struct {
 	commitTypes   []string
 }
 
+// NewUIModel creates a new UI model with the provided parameters.
 func NewUIModel(commitMsg, prompt, apiKey, commitType, tmpl string) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -63,14 +66,17 @@ func NewUIModel(commitMsg, prompt, apiKey, commitType, tmpl string) Model {
 	}
 }
 
+// Init is the initialization function for the Bubble Tea program.
 func (m Model) Init() tea.Cmd {
 	return nil
 }
 
+// NewProgram creates a new Bubble Tea program with the provided model.
 func NewProgram(model Model) *tea.Program {
 	return tea.NewProgram(model, tea.WithAltScreen())
 }
 
+// Update updates the UI model based on messages from Bubble Tea.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
@@ -136,9 +142,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
+	newList, cmd := m.updateList(msg)
+	m = newList.(Model)
+	return m, cmd
+}
+
+// updateList is a helper function to update the list component if needed.
+func (m Model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// View renders the UI based on the current state.
 func (m Model) View() string {
 	switch m.state {
 	case stateShowCommit:
@@ -168,6 +182,7 @@ func (m Model) View() string {
 	return ""
 }
 
+// commitCmd returns a Bubble Tea command to commit changes with the provided commit message.
 func commitCmd(commitMsg string) tea.Cmd {
 	return func() tea.Msg {
 		err := git.CommitChanges(commitMsg)
@@ -175,6 +190,7 @@ func commitCmd(commitMsg string) tea.Cmd {
 	}
 }
 
+// regenCmd returns a command to regenerate the commit message using OpenAI.
 func regenCmd(prompt, apiKey, commitType, tmpl string) tea.Cmd {
 	return func() tea.Msg {
 		msg, err := regenerate(prompt, apiKey, commitType, tmpl)
@@ -182,6 +198,7 @@ func regenCmd(prompt, apiKey, commitType, tmpl string) tea.Cmd {
 	}
 }
 
+// regenerate calls the OpenAI API to generate a new commit message.
 func regenerate(prompt, apiKey, commitType, tmpl string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
