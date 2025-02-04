@@ -25,7 +25,7 @@ import (
 
 const defaultTimeout = 60 * time.Second
 
-// Config is just a small struct to hold the relevant flags for clarity.
+// Config holds the relevant flags for clarity.
 type Config struct {
 	Prompt           string
 	CommitType       string
@@ -35,11 +35,12 @@ type Config struct {
 	EnableEmoji      bool
 }
 
-// main parses flags and orchestrates the commit workflow.
 func main() {
+	// Setup zerolog for console output
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
+	// Define command-line flags
 	apiKeyFlag := flag.String("apiKey", "", "OpenAI API key (or set OPENAI_API_KEY environment variable)")
 	languageFlag := flag.String("language", "english", "Language for the commit message")
 	commitTypeFlag := flag.String("commit-type", "", "Commit type (e.g. feat, fix, docs)")
@@ -62,20 +63,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create one shared OpenAI client
+	// Create a shared OpenAI client
 	openAIClient := gogpt.NewClient(apiKey)
 
-	// Create a context for everything
+	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	// Ensure we're in a Git repo
+	// Ensure we are in a Git repository (usando go-git)
 	if !git.CheckGitRepository(ctx) {
 		log.Error().Msg("This is not a Git repository.")
 		os.Exit(1)
 	}
 
-	// Validate commitType if provided
+	// Validate commit type if provided
 	if *commitTypeFlag != "" && !committypes.IsValidCommitType(*commitTypeFlag) {
 		log.Error().Msgf("Invalid commit type: %s", *commitTypeFlag)
 		os.Exit(1)
@@ -117,11 +118,7 @@ func main() {
 	}
 
 	// Possibly truncate the diff for OpenAI
-	truncated := false
-	diff, truncated = openai.MaybeSummarizeDiff(diff, 5000)
-	if truncated {
-		fmt.Println("Note: Diff was truncated for brevity.")
-	}
+	diff, _ = openai.MaybeSummarizeDiff(diff, 5000)
 
 	// Build the prompt for OpenAI
 	prompt := openai.BuildPrompt(diff, *languageFlag, *commitTypeFlag, "")
@@ -175,7 +172,6 @@ func main() {
 	)
 	p := ui.NewProgram(model)
 	if err := p.Start(); err != nil {
-		// If user canceled or error
 		if errors.Is(err, context.Canceled) {
 			os.Exit(0)
 		}
@@ -192,7 +188,7 @@ func main() {
 	}
 }
 
-// generateCommitMessage calls OpenAI to get a commit message, then sanitizes it.
+// generateCommitMessage calls OpenAI to get a commit message and sanitizes it.
 func generateCommitMessage(
 	ctx context.Context,
 	client *gogpt.Client,
@@ -218,7 +214,7 @@ func generateCommitMessage(
 	return res, nil
 }
 
-// doSemanticRelease handles the version bump logic (AI or manual).
+// doSemanticRelease handles version bumping (AI or manual).
 func doSemanticRelease(ctx context.Context, client *gogpt.Client, commitMsg string, manual bool) error {
 	log.Info().Msg("Starting semantic release process...")
 
@@ -233,25 +229,23 @@ func doSemanticRelease(ctx context.Context, client *gogpt.Client, commitMsg stri
 
 	var nextVersion string
 	if manual {
-		// Use the TUI approach from versioner/semver_tui
 		userPicked, err := versioner.RunSemVerTUI(ctx, currentVersion)
 		if err != nil {
 			return fmt.Errorf("manual semver TUI error: %w", err)
 		}
+
+		// FIX: If user cancels (q, esc, etc.), userPicked == "" => skip semantic release
 		if userPicked != "" {
 			nextVersion = userPicked
 			log.Info().Msgf("User selected next version: %s", nextVersion)
 		} else {
-			// If user pressed q, fallback to AI suggestion
-			aiVer, aiErr := versioner.SuggestNextVersion(ctx, currentVersion, commitMsg, client)
-			if aiErr != nil {
-				return fmt.Errorf("failed AI suggestion: %w", aiErr)
-			}
-			nextVersion = aiVer
-			log.Info().Msgf("No manual selection, fallback AI version: %s", nextVersion)
+			// User pressed q/esc => let's skip semantic release entirely
+			log.Info().Msg("User canceled manual semver selection. Skipping semantic release.")
+			return nil
 		}
+
 	} else {
-		// Normal AI suggestion
+		// If not in manual mode, we do the AI-based version suggestion
 		aiVer, aiErr := versioner.SuggestNextVersion(ctx, currentVersion, commitMsg, client)
 		if aiErr != nil {
 			return fmt.Errorf("AI version suggestion error: %w", aiErr)
@@ -260,10 +254,12 @@ func doSemanticRelease(ctx context.Context, client *gogpt.Client, commitMsg stri
 		log.Info().Msgf("AI-suggested version: %s", nextVersion)
 	}
 
+	// Proceed with tagging and pushing
 	if err := versioner.TagAndPush(ctx, nextVersion); err != nil {
 		return fmt.Errorf("failed to tag and push %s: %w", nextVersion, err)
 	}
 
+	// Run GoReleaser if desired
 	if err := versioner.RunGoReleaser(ctx); err != nil {
 		return fmt.Errorf("goreleaser failed: %w", err)
 	}
@@ -272,7 +268,7 @@ func doSemanticRelease(ctx context.Context, client *gogpt.Client, commitMsg stri
 	return nil
 }
 
-// runInteractiveSplit starts the partial-commit TUI from pkg/ui/splitter.
+// runInteractiveSplit starts the partial-commit TUI.
 func runInteractiveSplit(ctx context.Context, client *gogpt.Client) error {
 	diff, err := git.GetGitDiff(ctx)
 	if err != nil {

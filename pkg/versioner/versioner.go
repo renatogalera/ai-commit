@@ -9,31 +9,42 @@ import (
 	"strconv"
 	"strings"
 
-	gogpt "github.com/sashabaranov/go-openai"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
+	"golang.org/x/mod/semver"
 
 	"github.com/renatogalera/ai-commit/pkg/openai"
+	gogpt "github.com/sashabaranov/go-openai"
 )
 
-// GetCurrentVersionTag retrieves the most recent git tag that matches semantic versioning.
+// GetCurrentVersionTag retrieves the most recent Git tag that matches semantic versioning using go-git.
 func GetCurrentVersionTag(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "describe", "--tags", "--abbrev=0")
-	out, err := cmd.Output()
+	repo, err := git.PlainOpen(".")
 	if err != nil {
-		// If no tags are found, return empty string.
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 128 {
-			return "", nil
-		}
-		lowerErr := strings.ToLower(err.Error())
-		if strings.Contains(lowerErr, "no names found") || strings.Contains(lowerErr, "no tags can describe") {
-			return "", nil
-		}
-		return "", fmt.Errorf("error retrieving git tag: %w", err)
+		return "", fmt.Errorf("failed to open repository: %w", err)
 	}
-	return strings.TrimSpace(string(out)), nil
+	tagIter, err := repo.Tags()
+	if err != nil {
+		return "", fmt.Errorf("failed to get tags: %w", err)
+	}
+	var latestTag string
+	err = tagIter.ForEach(func(ref *plumbing.Reference) error {
+		tagName := ref.Name().Short()
+		if strings.HasPrefix(tagName, "v") && semver.IsValid(tagName) {
+			if latestTag == "" || semver.Compare(tagName, latestTag) > 0 {
+				latestTag = tagName
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return latestTag, nil
 }
 
 // SuggestNextVersion uses OpenAI to suggest the next semantic version based on the commit message.
-// It uses the shared OpenAI client instead of an API key.
 func SuggestNextVersion(ctx context.Context, currentVersion, commitMsg string, client *gogpt.Client) (string, error) {
 	if currentVersion == "" {
 		currentVersion = "v0.0.0"
@@ -51,19 +62,30 @@ func SuggestNextVersion(ctx context.Context, currentVersion, commitMsg string, c
 	return suggested, nil
 }
 
-// TagAndPush creates a new git tag and pushes it to the remote repository.
+// TagAndPush creates a new Git tag and pushes it to the remote repository using go-git.
 func TagAndPush(ctx context.Context, newVersionTag string) error {
 	if newVersionTag == "" {
 		return errors.New("no version tag provided to TagAndPush")
 	}
-	// Create tag
-	cmd := exec.CommandContext(ctx, "git", "tag", newVersionTag)
-	if err := cmd.Run(); err != nil {
+	repo, err := git.PlainOpen(".")
+	if err != nil {
+		return fmt.Errorf("failed to open repository: %w", err)
+	}
+	headRef, err := repo.Head()
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD reference: %w", err)
+	}
+	_, err = repo.CreateTag(newVersionTag, headRef.Hash(), nil)
+	if err != nil {
 		return fmt.Errorf("failed to create tag %s: %w", newVersionTag, err)
 	}
-	// Push tag
-	cmd = exec.CommandContext(ctx, "git", "push", "origin", newVersionTag)
-	if err := cmd.Run(); err != nil {
+	err = repo.PushContext(ctx, &git.PushOptions{
+		RemoteName: "origin",
+		RefSpecs: []config.RefSpec{
+			config.RefSpec("refs/tags/" + newVersionTag + ":refs/tags/" + newVersionTag),
+		},
+	})
+	if err != nil {
 		return fmt.Errorf("failed to push tag %s: %w", newVersionTag, err)
 	}
 	return nil
@@ -72,14 +94,13 @@ func TagAndPush(ctx context.Context, newVersionTag string) error {
 // RunGoReleaser executes GoReleaser to create and publish release artifacts.
 func RunGoReleaser(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "goreleaser", "release")
-	out, err := cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("goreleaser failed: %v\n%s", err, string(out))
+		return fmt.Errorf("goreleaser failed: %v\n%s", err, string(output))
 	}
 	return nil
 }
 
-// buildVersionPrompt creates a prompt for OpenAI to suggest the next semantic version.
 func buildVersionPrompt(currentVersion, commitMsg string) string {
 	return fmt.Sprintf(`
 We are using semantic versioning, where a version is defined as MAJOR.MINOR.PATCH.
@@ -96,7 +117,6 @@ Please output the next version in the format vX.Y.Z without extra explanation.
 `, currentVersion, commitMsg)
 }
 
-// parseAiVersionSuggestion extracts the version from the AI's response and validates it.
 func parseAiVersionSuggestion(aiResponse, fallback string) (string, error) {
 	re := regexp.MustCompile(`v?(\d+\.\d+\.\d+)`)
 	match := re.FindStringSubmatch(aiResponse)
@@ -107,7 +127,6 @@ func parseAiVersionSuggestion(aiResponse, fallback string) (string, error) {
 	return suggestedVersion, nil
 }
 
-// incrementPatch increments the patch version of the given version string.
 func incrementPatch(versionTag string) string {
 	ver := stripLeadingV(versionTag)
 	parts := strings.Split(ver, ".")
@@ -122,7 +141,6 @@ func incrementPatch(versionTag string) string {
 	return "v" + strings.Join(parts, ".")
 }
 
-// stripLeadingV removes the leading 'v' from a version string if present.
 func stripLeadingV(version string) string {
 	if strings.HasPrefix(version, "v") {
 		return strings.TrimPrefix(version, "v")

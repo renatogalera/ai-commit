@@ -153,13 +153,11 @@ func (m Model) updateAutoGroup() (tea.Model, tea.Cmd) {
 
 // partialCommit stages selected diff chunks and commits them with an AI-generated commit message.
 func partialCommit(chunks []git.DiffChunk, selected map[int]bool, client *gogpt.Client) error {
-	// Unstage everything first to apply patch exactly as selected.
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := runCmd(ctx, "git", "reset"); err != nil {
-		return fmt.Errorf("failed to reset: %w", err)
-	}
+	// Resetting index is not implemented here; assume that the working tree
+	// is prepared to apply the patch.
 	patch, err := buildPatch(chunks, selected)
 	if err != nil {
 		return err
@@ -212,7 +210,7 @@ func buildPatch(chunks []git.DiffChunk, selected map[int]bool) (string, error) {
 	return patch, nil
 }
 
-// generatePartialCommitMessage uses the user’s partial diff to produce a commit message via OpenAI.
+// generatePartialCommitMessage uses the partial diff to produce a commit message via OpenAI.
 func generatePartialCommitMessage(ctx context.Context, diff string, client *gogpt.Client) (string, error) {
 	prompt := fmt.Sprintf(`
 Generate a commit message for the following partial diff.
@@ -228,12 +226,4 @@ Diff:
 		return "", fmt.Errorf("AI error: %w", err)
 	}
 	return strings.TrimSpace(msg), nil
-}
-
-// runCmd executes a command with a context.
-func runCmd(ctx context.Context, cmdName string, args ...string) error {
-	cmd := exec.CommandContext(ctx, cmdName, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
