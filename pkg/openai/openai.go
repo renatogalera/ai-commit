@@ -12,11 +12,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 )
 
-// We'll remove the old "git" strip logic and rely on the prompt instructions.
-var sanitizePattern = regexp.MustCompile(`^(?:(\p{So}|\p{Sk}|:\w+:)\s*)?(` + committypes.TypesRegexPattern() + `)(\([^)]+\))?:\s*`)
-
-// GetChatCompletion calls the OpenAI API using a shared *gogpt.Client
-// and returns the generated string.
+// GetChatCompletion calls the OpenAI API and returns the generated commit message.
 func GetChatCompletion(ctx context.Context, client *gogpt.Client, prompt string) (string, error) {
 	req := gogpt.ChatCompletionRequest{
 		Model: gogpt.GPT4oLatest,
@@ -38,7 +34,7 @@ func GetChatCompletion(ctx context.Context, client *gogpt.Client, prompt string)
 	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }
 
-// BuildPrompt includes an extra rule about not starting with "git".
+// BuildPrompt constructs the prompt sent to OpenAI.
 func BuildPrompt(diff, language, commitType, additionalText string) string {
 	var sb strings.Builder
 
@@ -50,15 +46,12 @@ func BuildPrompt(diff, language, commitType, additionalText string) string {
 	sb.WriteString("- Omit disclaimers, code blocks, or references to AI.\n")
 	sb.WriteString("- Use the present tense and ensure clarity.\n")
 	sb.WriteString("- Output only the commit message.\n")
-
-	// NEW RULE: no "git" at the start
 	sb.WriteString("- Do NOT begin your commit message with the word 'git' or references to it.\n")
 
 	if commitType != "" && committypes.IsValidCommitType(commitType) {
 		sb.WriteString(fmt.Sprintf("- Use the commit type '%s'.\n", commitType))
 	}
 	sb.WriteString(fmt.Sprintf("- Write the message in %s.\n", language))
-
 	sb.WriteString("Here is the diff:\n\n")
 	sb.WriteString(diff)
 
@@ -70,7 +63,7 @@ func BuildPrompt(diff, language, commitType, additionalText string) string {
 	return sb.String()
 }
 
-// MaybeSummarizeDiff truncates the diff if it exceeds maxLength, appending a truncation notice.
+// MaybeSummarizeDiff truncates the diff if it exceeds maxLength.
 func MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
 	if len(diff) <= maxLength {
 		return diff, false
@@ -84,17 +77,15 @@ func MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
 	return truncated, true
 }
 
-// SanitizeOpenAIResponse cleans the OpenAI response by removing code fences and
-// any leading conventional-commit token if we already have a commit type.
+// SanitizeOpenAIResponse cleans the AI response.
 func SanitizeOpenAIResponse(msg, commitType string) string {
-	// Remove code fences
 	msg = strings.ReplaceAll(msg, "```", "")
 	msg = strings.TrimSpace(msg)
 
-	// If a commitType was specified, remove any raw type prefix in the first line.
 	if commitType != "" {
 		lines := strings.SplitN(msg, "\n", 2)
 		if len(lines) > 0 {
+			sanitizePattern := regexp.MustCompile(`^(?:(\p{So}|\p{Sk}|:\w+:)\s*)?(` + committypes.TypesRegexPattern() + `)(\([^)]+\))?:\s*`)
 			lines[0] = sanitizePattern.ReplaceAllString(lines[0], "")
 		}
 		msg = strings.Join(lines, "\n")
@@ -103,9 +94,8 @@ func SanitizeOpenAIResponse(msg, commitType string) string {
 	return strings.TrimSpace(msg)
 }
 
-// AddGitmoji prepends an emoji to the commit message based on the commit type.
+// AddGitmoji prepends an emoji to the commit message based on commitType.
 func AddGitmoji(message, commitType string) string {
-	// If commitType is empty, attempt to guess from the message
 	if commitType == "" {
 		lowerMsg := strings.ToLower(message)
 		switch {
@@ -134,7 +124,6 @@ func AddGitmoji(message, commitType string) string {
 		return message
 	}
 
-	// Map each commit type to an emoji
 	gitmojis := map[string]string{
 		"feat":     "✨",
 		"fix":      "🐛",
@@ -152,7 +141,6 @@ func AddGitmoji(message, commitType string) string {
 		prefix = fmt.Sprintf("%s %s", emoji, commitType)
 	}
 
-	// Build a regex to detect an existing conventional commit prefix
 	emojiPattern := committypes.BuildRegexPatternWithEmoji()
 	if matches := emojiPattern.FindStringSubmatch(message); len(matches) > 0 {
 		cleanMsg := emojiPattern.ReplaceAllString(message, "")

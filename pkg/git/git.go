@@ -3,80 +3,201 @@ package git
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
+	"io/ioutil"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
-// defaultGitTimeout is a smaller Git command timeout used if the caller
-// does not specify or passes nil context. You can adjust as needed.
-var defaultGitTimeout = 15 * time.Second
-
-// runCommandContext runs a shell command with the provided context.
-func runCommandContext(ctx context.Context, cmdName string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, cmdName, args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to run %s: %w", cmdName, err)
-	}
-	return string(output), nil
+// DiffChunk represents a single "hunk" within a diff for a particular file.
+type DiffChunk struct {
+	FilePath   string
+	HunkHeader string
+	Lines      []string
 }
 
-// CheckGitRepository verifies if the current folder is inside a Git repository.
+// ParseDiffToChunks splits a unified diff into a list of DiffChunk structs.
+func ParseDiffToChunks(diff string) ([]DiffChunk, error) {
+	lines := strings.Split(diff, "\n")
+	var chunks []DiffChunk
+
+	var currentChunk *DiffChunk
+	var currentFile string
+	var inHunk bool
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "diff --git ") {
+			if currentChunk != nil {
+				chunks = append(chunks, *currentChunk)
+				currentChunk = nil
+			}
+			file := parseFilePath(line)
+			if file != "" {
+				currentFile = file
+			}
+			inHunk = false
+			continue
+		}
+
+		if strings.HasPrefix(line, "@@ ") {
+			if currentChunk != nil {
+				chunks = append(chunks, *currentChunk)
+			}
+			currentChunk = &DiffChunk{
+				FilePath:   currentFile,
+				HunkHeader: line,
+				Lines:      []string{},
+			}
+			inHunk = true
+			continue
+		}
+
+		if inHunk && currentChunk != nil {
+			currentChunk.Lines = append(currentChunk.Lines, line)
+		}
+	}
+
+	if currentChunk != nil {
+		chunks = append(chunks, *currentChunk)
+	}
+	return chunks, nil
+}
+
+// parseFilePath attempts to parse the file path from a "diff --git" line.
+func parseFilePath(diffLine string) string {
+	parts := strings.Split(diffLine, " ")
+	if len(parts) < 4 {
+		return ""
+	}
+	aPath := strings.TrimPrefix(parts[2], "a/")
+	bPath := strings.TrimPrefix(parts[3], "b/")
+	if aPath == bPath {
+		return aPath
+	}
+	return bPath
+}
+
+// CheckGitRepository verifies if the current folder is a Git repository using go-git.
 func CheckGitRepository(ctx context.Context) bool {
-	if ctx == nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), defaultGitTimeout)
-		defer cancel()
-	}
-	out, err := runCommandContext(ctx, "git", "rev-parse", "--is-inside-work-tree")
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(out) == "true"
+	_, err := git.PlainOpen(".")
+	return err == nil
 }
 
-// GetGitDiff returns the staged diff as a string.
+// GetGitDiff returns a unified diff of staged changes by comparing the HEAD tree and the working directory.
+// (Nota: para simplificar, utiliza o conteúdo atual dos arquivos, assumindo que não foram modificados após o stage.)
 func GetGitDiff(ctx context.Context) (string, error) {
-	if ctx == nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), defaultGitTimeout)
-		defer cancel()
+	repo, err := git.PlainOpen(".")
+	if err != nil {
+		return "", fmt.Errorf("failed to open repository: %w", err)
 	}
-	return runCommandContext(ctx, "git", "diff", "--staged")
+
+	headRef, err := repo.Head()
+	if err != nil {
+		return "", fmt.Errorf("failed to get HEAD reference: %w", err)
+	}
+
+	headCommit, err := repo.CommitObject(headRef.Hash())
+	if err != nil {
+		return "", fmt.Errorf("failed to get HEAD commit: %w", err)
+	}
+
+	headTree, err := headCommit.Tree()
+	if err != nil {
+		return "", fmt.Errorf("failed to get HEAD tree: %w", err)
+	}
+
+	wt, err := repo.Worktree()
+	if err != nil {
+		return "", fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	status, err := wt.Status()
+	if err != nil {
+		return "", fmt.Errorf("failed to get worktree status: %w", err)
+	}
+
+	var diffResult strings.Builder
+	dmp := diffmatchpatch.New()
+
+	for filePath, fileStatus := range status {
+		// Verifica se o arquivo foi staged (alteração na área de stage)
+		if fileStatus.Staging == git.Unmodified {
+			continue
+		}
+
+		// Conteúdo antigo (versão do HEAD)
+		var oldContent string
+		fileInTree, err := headTree.File(filePath)
+		if err == nil {
+			reader, err := fileInTree.Blob.Reader()
+			if err == nil {
+				data, err := ioutil.ReadAll(reader)
+				reader.Close()
+				if err == nil {
+					oldContent = string(data)
+				}
+			}
+		}
+
+		// Conteúdo novo (arquivo no diretório de trabalho – aproximação para a versão staged)
+		newContentBytes, err := ioutil.ReadFile(filePath)
+		var newContent string
+		if err == nil {
+			newContent = string(newContentBytes)
+		} else {
+			newContent = ""
+		}
+
+		// Gera diff unificado usando diffmatchpatch
+		diffs := dmp.DiffMain(oldContent, newContent, true)
+		patches := dmp.PatchMake(oldContent, newContent, diffs)
+		patchText := dmp.PatchToText(patches)
+
+		if strings.TrimSpace(patchText) != "" {
+			diffResult.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", filePath, filePath))
+			diffResult.WriteString(patchText)
+			diffResult.WriteString("\n")
+		}
+	}
+
+	return diffResult.String(), nil
 }
 
-// GetHeadCommitMessage retrieves the last commit message on HEAD.
+// GetHeadCommitMessage retrieves the last commit message on HEAD using go-git.
 func GetHeadCommitMessage(ctx context.Context) (string, error) {
-	if ctx == nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), defaultGitTimeout)
-		defer cancel()
-	}
-	out, err := runCommandContext(ctx, "git", "log", "-1", "--pretty=%B")
+	repo, err := git.PlainOpen(".")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to open repository: %w", err)
 	}
-	return strings.TrimSpace(out), nil
+	headRef, err := repo.Head()
+	if err != nil {
+		return "", fmt.Errorf("failed to get HEAD reference: %w", err)
+	}
+	commit, err := repo.CommitObject(headRef.Hash())
+	if err != nil {
+		return "", fmt.Errorf("failed to get HEAD commit: %w", err)
+	}
+	return strings.TrimSpace(commit.Message), nil
 }
 
-// GetCurrentBranch returns the current Git branch name.
+// GetCurrentBranch returns the current Git branch name using go-git.
 func GetCurrentBranch(ctx context.Context) (string, error) {
-	if ctx == nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), defaultGitTimeout)
-		defer cancel()
-	}
-	out, err := runCommandContext(ctx, "git", "branch", "--show-current")
+	repo, err := git.PlainOpen(".")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to open repository: %w", err)
 	}
-	return strings.TrimSpace(out), nil
+	headRef, err := repo.Head()
+	if err != nil {
+		return "", fmt.Errorf("failed to get HEAD reference: %w", err)
+	}
+	return headRef.Name().Short(), nil
 }
 
-// FilterLockFiles removes diff sections belonging to lock files from the analysis.
+// FilterLockFiles removes diff sections of lock files from the analysis.
 func FilterLockFiles(diff string, lockFiles []string) string {
 	lines := strings.Split(diff, "\n")
 	var filtered []string
@@ -106,18 +227,24 @@ func FilterLockFiles(diff string, lockFiles []string) string {
 	return strings.Join(filtered, "\n")
 }
 
-// CommitChanges takes a commit message and creates a commit with it.
+// CommitChanges creates a commit with the provided message using go-git.
 func CommitChanges(ctx context.Context, commitMessage string) error {
-	if ctx == nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), defaultGitTimeout)
-		defer cancel()
+	repo, err := git.PlainOpen(".")
+	if err != nil {
+		return fmt.Errorf("failed to open repository: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, "git", "commit", "-F", "-")
-	cmd.Stdin = strings.NewReader(commitMessage)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	wt, err := repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree: %w", err)
+	}
+	_, err = wt.Commit(commitMessage, &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "ai-commit",
+			Email: "rennato@gmail.com",
+			When:  time.Now(),
+		},
+	})
+	if err != nil {
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 	return nil
