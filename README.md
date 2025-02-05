@@ -47,7 +47,7 @@
    Dynamically insert the AI-generated commit into custom templates with placeholders (e.g., branch name).
 
 6. **Semantic Release (Experimental)**  
-   Automatically suggests a new semantic version tag (`MAJOR.MINOR.PATCH`) based on commit content, optionally creates and pushes a new git tag, and invokes [GoReleaser](https://goreleaser.com/) to publish release artifacts.
+   Automatically suggests a new semantic version tag (`MAJOR.MINOR.PATCH`) based on commit content, optionally creates a new git tag).
 
 7. **Interactive Commit Splitting**  
    Split large diffs into multiple smaller commits via an interactive TUI that shows each “chunk” of changes. Select which lines or hunks you want in each commit. Each partial commit can also be assigned an AI-generated commit message.
@@ -117,19 +117,11 @@ ai-commit --template "Branch: {GIT_BRANCH}\nCommit: {COMMIT_MESSAGE}"
 
 ### Semantic Release
 
-To automatically suggest the next version and optionally create & push a Git tag plus run [GoReleaser](https://goreleaser.com/):
 
-1. Install GoReleaser if you haven't already:
-
-brew install goreleaser/tap/goreleaser
-
-or see [official installation docs](https://goreleaser.com/install/).
-
-2. Use `--semantic-release` when running AI-Commit. This will:
+1. Use `--semantic-release` when running AI-Commit. This will:
    - Parse your current version (from the latest `vX.Y.Z` Git tag).
    - Consult OpenAI to determine if you need a MAJOR, MINOR, or PATCH bump.
-   - Automatically tag your repository, push the new tag, and run `goreleaser release`.
-
+ 
 ---
 
 ## Usage
@@ -181,8 +173,7 @@ Run **ai-commit** inside a Git repository with staged changes.
    Commits your changes. If `--semantic-release` is enabled, AI-Commit:
    - Reads the current version tag.
    - Generates a recommended next version (MAJOR, MINOR, or PATCH).
-   - Creates and pushes a new Git tag.
-   - Invokes GoReleaser to build and publish your release artifacts.
+   - Creates new Git tag.
 
 8. **Interactive Commit Splitting (optional)**  
    If `--interactive-split` is used, AI-Commit shows a separate TUI that breaks the diff into chunks, letting you select what belongs in each commit. Each partial commit is also assigned an AI-generated commit message.
