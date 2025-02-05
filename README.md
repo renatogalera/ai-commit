@@ -25,6 +25,7 @@
     - [4. Custom Template](#4-custom-template)
     - [5. Interactive Commit Splitting (Partial Commits)](#5-interactive-commit-splitting-partial-commits)
     - [6. Optional Emoji Prefix](#6-optional-emoji-prefix)
+    - [7. Semantic Release with Manual Version Bump](#7-semantic-release-with-manual-version-bump)
   - [License](#license)
 
 ---
@@ -47,10 +48,10 @@
    Dynamically insert the AI-generated commit into custom templates with placeholders (e.g., branch name).
 
 6. **Semantic Release (Experimental)**  
-   Automatically suggests a new semantic version tag (`MAJOR.MINOR.PATCH`) based on commit content, optionally creates a new git tag).
+   Automatically suggests a new semantic version tag (`MAJOR.MINOR.PATCH`) based on commit content and optionally creates a new git tag.
 
 7. **Interactive Commit Splitting**  
-   Split large diffs into multiple smaller commits via an interactive TUI that shows each “chunk” of changes. Select which lines or hunks you want in each commit. Each partial commit can also be assigned an AI-generated commit message.
+   Split large diffs into multiple smaller commits via an interactive TUI that shows each “chunk” of changes. Each partial commit can also be assigned an AI-generated commit message.
 
 8. **Optional Emoji Prefix**  
    Add an emoji prefix to your commit message if desired.
@@ -99,7 +100,9 @@ Set your API key either via a command-line flag or an environment variable:
 - **Command-Line Flag:** `--apiKey YOUR_API_KEY`
 - **Environment Variable:**  
 
-export OPENAI_API_KEY=YOUR_API_KEY
+  ```bash
+  export OPENAI_API_KEY=YOUR_API_KEY
+  ```
 
 ### Custom Templates
 
@@ -113,15 +116,18 @@ Use the `--template` flag to supply a commit message template with placeholders:
 
 For example:
 
+```bash
 ai-commit --template "Branch: {GIT_BRANCH}\nCommit: {COMMIT_MESSAGE}"
+```
 
 ### Semantic Release
-
 
 1. Use `--semantic-release` when running AI-Commit. This will:
    - Parse your current version (from the latest `vX.Y.Z` Git tag).
    - Consult OpenAI to determine if you need a MAJOR, MINOR, or PATCH bump.
- 
+   
+2. *(Optional)* Add the `--manual-semver` flag to pick the next version manually (major/minor/patch) instead of using the AI suggestion.
+
 ---
 
 ## Usage
@@ -142,6 +148,8 @@ Run **ai-commit** inside a Git repository with staged changes.
   Language used in AI generation (default `english`).
 - **`--semantic-release`**  
   Triggers AI-assisted version bumping and release tasks (see [Semantic Release](#semantic-release)).
+- **`--manual-semver`**  
+  When used with `--semantic-release`, launches a TUI to manually select the next version (major/minor/patch).
 - **`--interactive-split`**  
   Launches an interactive TUI to split staged changes into multiple partial commits.
 - **`--emoji`**  
@@ -172,8 +180,8 @@ Run **ai-commit** inside a Git repository with staged changes.
 7. **Commit & (Optional) Semantic Release**  
    Commits your changes. If `--semantic-release` is enabled, AI-Commit:
    - Reads the current version tag.
-   - Generates a recommended next version (MAJOR, MINOR, or PATCH).
-   - Creates new Git tag.
+   - Generates a recommended next version (either via AI suggestion or manually via TUI).
+   - Creates a new Git tag.
 
 8. **Interactive Commit Splitting (optional)**  
    If `--interactive-split` is used, AI-Commit shows a separate TUI that breaks the diff into chunks, letting you select what belongs in each commit. Each partial commit is also assigned an AI-generated commit message.
@@ -210,7 +218,7 @@ ai-commit --apiKey YOUR_API_KEY --semantic-release
 ```
 
 1. Generates the commit message (interactive or forced).  
-2. After committing, it reads your latest version tag, queries OpenAI for a suggested version increment, tags your repository, and runs GoReleaser.
+2. After committing, it reads your latest version tag, queries OpenAI for a suggested version increment, and tags your repository.
 
 ### 4. Custom Template
 
@@ -238,10 +246,20 @@ ai-commit --interactive-split
 ai-commit --emoji
 ```
 
-Adds a relevant emoji to the beginning of your commit message if a recognized commit type (e.g. `feat`, `fix`) is found or inferred. If the commit type is unrecognized or you do not use `--emoji`, it won't add an emoji prefix.
+Adds a relevant emoji to the beginning of your commit message if a recognized commit type (e.g. `feat`, `fix`) is found or inferred.
+
+### 7. Semantic Release with Manual Version Bump
+
+```bash
+ai-commit --semantic-release --manual-semver
+```
+
+In this mode, after the commit is created, a TUI will prompt you to manually select the next version (major, minor, or patch) instead of using an AI-generated suggestion. This gives you more control over your versioning process.
 
 ---
 
 ## License
 
-This project is released under the [MIT License](LICENSE.md). Please see the LICENSE file for details
+This project is released under the [MIT License](LICENSE.md). Please see the LICENSE file for details.
+
+---
