@@ -121,11 +121,23 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-// Update updates the UI model based on messages.
+// autoQuitMsg is sent after a delay to signal the program to exit automatically.
+type autoQuitMsg struct{}
+
+// autoQuitCmd returns a command that waits 2 seconds before sending an autoQuitMsg.
+func autoQuitCmd() tea.Cmd {
+	return tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
+		return autoQuitMsg{}
+	})
+}
+
+// Update updates the UI model based on incoming messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+
+	// Handle key messages.
 	case tea.KeyMsg:
 		switch m.state {
 		case stateShowCommit:
@@ -215,8 +227,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, regenCmd(m.openAIClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 			}
 		case stateResult:
-			return m, tea.Quit
+			// In stateResult we now simply wait for the autoQuitMsg
+			// so no key input is needed.
+			return m, nil
 		}
+
+	// Handle regeneration result.
 	case regenMsg:
 		if msg.err != nil {
 			m.result = fmt.Sprintf("Error generating commit message: %v", msg.err)
@@ -225,13 +241,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.commitMsg = msg.msg
 			m.state = stateShowCommit
 		}
+
+	// Handle commit result.
 	case commitResultMsg:
 		if msg.err != nil {
 			m.result = fmt.Sprintf("Commit failed: %v", msg.err)
+			m.state = stateResult
 		} else {
 			m.result = "Commit created successfully!"
+			m.state = stateResult
+			// Schedule an automatic quit after 2 seconds.
+			return m, autoQuitCmd()
 		}
-		m.state = stateResult
+
+	// When receiving the autoQuitMsg, exit the TUI.
+	case autoQuitMsg:
+		return m, tea.Quit
+
+	// Update spinner during generating or committing states.
 	case spinner.TickMsg:
 		if m.state == stateGenerating || m.state == stateCommitting {
 			m.spinner, cmd = m.spinner.Update(msg)
