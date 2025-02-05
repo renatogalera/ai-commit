@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -18,6 +19,17 @@ type DiffChunk struct {
 	FilePath   string
 	HunkHeader string
 	Lines      []string
+}
+
+// isBinary checks if the provided data is binary by scanning for a null byte.
+// This is a simple heuristic that works in many cases.
+func isBinary(data []byte) bool {
+	// An empty file is not considered binary.
+	if len(data) == 0 {
+		return false
+	}
+	// If a null byte is found, consider it binary.
+	return bytes.IndexByte(data, 0) != -1
 }
 
 // ParseDiffToChunks splits a unified diff into a list of DiffChunk structs.
@@ -88,7 +100,7 @@ func CheckGitRepository(ctx context.Context) bool {
 }
 
 // GetGitDiff returns a unified diff of staged changes by comparing the HEAD tree and the working directory.
-// (Nota: para simplificar, utiliza o conteúdo atual dos arquivos, assumindo que não foram modificados após o stage.)
+// This version skips diffing files that are detected as binary.
 func GetGitDiff(ctx context.Context) (string, error) {
 	repo, err := git.PlainOpen(".")
 	if err != nil {
@@ -124,12 +136,12 @@ func GetGitDiff(ctx context.Context) (string, error) {
 	dmp := diffmatchpatch.New()
 
 	for filePath, fileStatus := range status {
-		// Verifica se o arquivo foi staged (alteração na área de stage)
+		// Only process files that have staged changes.
 		if fileStatus.Staging == git.Unmodified {
 			continue
 		}
 
-		// Conteúdo antigo (versão do HEAD)
+		// Read the old content (from HEAD) if available.
 		var oldContent string
 		fileInTree, err := headTree.File(filePath)
 		if err == nil {
@@ -143,16 +155,21 @@ func GetGitDiff(ctx context.Context) (string, error) {
 			}
 		}
 
-		// Conteúdo novo (arquivo no diretório de trabalho – aproximação para a versão staged)
+		// Read the new content from the file system.
 		newContentBytes, err := ioutil.ReadFile(filePath)
 		var newContent string
 		if err == nil {
+			// Skip binary files based on the new file content.
+			if isBinary(newContentBytes) {
+				// Optionally, you can print a message or log that a binary file was skipped.
+				continue
+			}
 			newContent = string(newContentBytes)
 		} else {
 			newContent = ""
 		}
 
-		// Gera diff unificado usando diffmatchpatch
+		// Generate a unified diff using diffmatchpatch.
 		diffs := dmp.DiffMain(oldContent, newContent, true)
 		patches := dmp.PatchMake(oldContent, newContent, diffs)
 		patchText := dmp.PatchToText(patches)
