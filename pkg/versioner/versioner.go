@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"golang.org/x/mod/semver"
 
@@ -62,42 +60,29 @@ func SuggestNextVersion(ctx context.Context, currentVersion, commitMsg string, c
 	return suggested, nil
 }
 
-// TagAndPush creates a new Git tag and pushes it to the remote repository using go-git.
-func TagAndPush(ctx context.Context, newVersionTag string) error {
+func CreateLocalTag(ctx context.Context, newVersionTag string) error {
 	if newVersionTag == "" {
-		return errors.New("no version tag provided to TagAndPush")
+		return errors.New("no version tag provided")
 	}
+
+	// Open the local Git repository.
 	repo, err := git.PlainOpen(".")
 	if err != nil {
 		return fmt.Errorf("failed to open repository: %w", err)
 	}
+
+	// Retrieve the current HEAD reference.
 	headRef, err := repo.Head()
 	if err != nil {
 		return fmt.Errorf("failed to get HEAD reference: %w", err)
 	}
+
+	// Create a new tag pointing to HEAD.
 	_, err = repo.CreateTag(newVersionTag, headRef.Hash(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create tag %s: %w", newVersionTag, err)
 	}
-	err = repo.PushContext(ctx, &git.PushOptions{
-		RemoteName: "origin",
-		RefSpecs: []config.RefSpec{
-			config.RefSpec("refs/tags/" + newVersionTag + ":refs/tags/" + newVersionTag),
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to push tag %s: %w", newVersionTag, err)
-	}
-	return nil
-}
 
-// RunGoReleaser executes GoReleaser to create and publish release artifacts.
-func RunGoReleaser(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "goreleaser", "release")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("goreleaser failed: %v\n%s", err, string(output))
-	}
 	return nil
 }
 

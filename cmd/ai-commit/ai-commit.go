@@ -46,7 +46,7 @@ func main() {
 	commitTypeFlag := flag.String("commit-type", "", "Commit type (e.g. feat, fix, docs)")
 	templateFlag := flag.String("template", "", "Commit message template (e.g. 'Modified {GIT_BRANCH} | {COMMIT_MESSAGE}')")
 	forceFlag := flag.Bool("force", false, "Automatically commit without TUI")
-	semanticReleaseFlag := flag.Bool("semantic-release", false, "Suggest/tag a new version + run GoReleaser after commit")
+	semanticReleaseFlag := flag.Bool("semantic-release", false, "Suggest/tag a new version")
 	interactiveSplitFlag := flag.Bool("interactive-split", false, "Interactively split staged changes into multiple commits")
 	emojiFlag := flag.Bool("emoji", false, "Include an emoji prefix in commit message")
 	manualSemverFlag := flag.Bool("manual-semver", false, "Pick the next version manually (major/minor/patch) instead of AI suggestion")
@@ -214,7 +214,7 @@ func generateCommitMessage(
 	return res, nil
 }
 
-// doSemanticRelease handles version bumping (AI or manual).
+// doSemanticRelease handles version bumping (AI or manual) and creates a local tag.
 func doSemanticRelease(ctx context.Context, client *gogpt.Client, commitMsg string, manual bool) error {
 	log.Info().Msg("Starting semantic release process...")
 
@@ -234,18 +234,14 @@ func doSemanticRelease(ctx context.Context, client *gogpt.Client, commitMsg stri
 			return fmt.Errorf("manual semver TUI error: %w", err)
 		}
 
-		// FIX: If user cancels (q, esc, etc.), userPicked == "" => skip semantic release
 		if userPicked != "" {
 			nextVersion = userPicked
 			log.Info().Msgf("User selected next version: %s", nextVersion)
 		} else {
-			// User pressed q/esc => let's skip semantic release entirely
 			log.Info().Msg("User canceled manual semver selection. Skipping semantic release.")
 			return nil
 		}
-
 	} else {
-		// If not in manual mode, we do the AI-based version suggestion
 		aiVer, aiErr := versioner.SuggestNextVersion(ctx, currentVersion, commitMsg, client)
 		if aiErr != nil {
 			return fmt.Errorf("AI version suggestion error: %w", aiErr)
@@ -254,17 +250,12 @@ func doSemanticRelease(ctx context.Context, client *gogpt.Client, commitMsg stri
 		log.Info().Msgf("AI-suggested version: %s", nextVersion)
 	}
 
-	// Proceed with tagging and pushing
-	if err := versioner.TagAndPush(ctx, nextVersion); err != nil {
-		return fmt.Errorf("failed to tag and push %s: %w", nextVersion, err)
+	// Create the tag locally without pushing it.
+	if err := versioner.CreateLocalTag(ctx, nextVersion); err != nil {
+		return fmt.Errorf("failed to create local tag %s: %w", nextVersion, err)
 	}
 
-	// Run GoReleaser if desired
-	if err := versioner.RunGoReleaser(ctx); err != nil {
-		return fmt.Errorf("goreleaser failed: %w", err)
-	}
-
-	log.Info().Msgf("Semantic release done! Pushed tag %s", nextVersion)
+	log.Info().Msgf("Semantic release done! Local tag %s created", nextVersion)
 	return nil
 }
 
