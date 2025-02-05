@@ -156,8 +156,6 @@ func partialCommit(chunks []git.DiffChunk, selected map[int]bool, client *gogpt.
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	// Resetting index is not implemented here; assume that the working tree
-	// is prepared to apply the patch.
 	patch, err := buildPatch(chunks, selected)
 	if err != nil {
 		return err
