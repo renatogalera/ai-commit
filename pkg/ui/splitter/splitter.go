@@ -11,13 +11,11 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	gogpt "github.com/sashabaranov/go-openai"
 
+	"github.com/renatogalera/ai-commit/pkg/ai"
 	"github.com/renatogalera/ai-commit/pkg/git"
-	"github.com/renatogalera/ai-commit/pkg/openai"
 )
 
-// splitterState represents the state of the interactive splitter UI.
 type splitterState int
 
 const (
@@ -26,7 +24,6 @@ const (
 	stateCommitted
 )
 
-// chunkItem implements list.Item for displaying diff chunks.
 type chunkItem struct {
 	Chunk    git.DiffChunk
 	Selected bool
@@ -36,53 +33,46 @@ func (ci chunkItem) Title() string       { return ci.Chunk.FilePath }
 func (ci chunkItem) Description() string { return ci.Chunk.HunkHeader }
 func (ci chunkItem) FilterValue() string { return ci.Chunk.FilePath }
 
-// Model represents the state of the interactive splitter.
 type Model struct {
 	state        splitterState
 	list         list.Model
 	spinner      spinner.Model
 	chunks       []git.DiffChunk
 	selected     map[int]bool
-	openAIClient *gogpt.Client
+	aiClient     ai.AIClient
 	commitResult string
 }
 
-// NewSplitterModel creates a new splitter model with the given diff chunks and OpenAI client.
-func NewSplitterModel(chunks []git.DiffChunk, client *gogpt.Client) Model {
+func NewSplitterModel(chunks []git.DiffChunk, client ai.AIClient) Model {
 	items := make([]list.Item, 0, len(chunks))
 	for _, c := range chunks {
 		items = append(items, chunkItem{Chunk: c})
 	}
-
 	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
 	l.Title = "Select chunks to commit (press space to toggle, 'c' to commit, 'a' to auto-group, 'q' to quit)"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
-
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-
 	return Model{
 		state:        stateList,
 		list:         l,
 		spinner:      s,
 		chunks:       chunks,
 		selected:     make(map[int]bool),
-		openAIClient: client,
+		aiClient:     client,
+		commitResult: "",
 	}
 }
 
-// NewProgram creates a new Bubble Tea program for the splitter UI.
 func NewProgram(m Model) *tea.Program {
 	return tea.NewProgram(m)
 }
 
-// Init is the initialization function for the splitter.
 func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-// Update updates the splitter model based on incoming messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -113,7 +103,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// View renders the splitter UI based on the current state.
 func (m Model) View() string {
 	switch m.state {
 	case stateList:
@@ -126,13 +115,11 @@ func (m Model) View() string {
 	return ""
 }
 
-// updateCommit handles the process of committing selected chunks.
 func (m Model) updateCommit() (tea.Model, tea.Cmd) {
 	newModel := m
 	newModel.state = stateSpinner
-
 	return newModel, func() tea.Msg {
-		err := partialCommit(newModel.chunks, newModel.selected, newModel.openAIClient)
+		err := partialCommit(newModel.chunks, newModel.selected, newModel.aiClient)
 		if err != nil {
 			newModel.commitResult = fmt.Sprintf("Error: %v", err)
 		} else {
@@ -143,7 +130,6 @@ func (m Model) updateCommit() (tea.Model, tea.Cmd) {
 	}
 }
 
-// updateAutoGroup selects all chunks for auto grouping.
 func (m Model) updateAutoGroup() (tea.Model, tea.Cmd) {
 	for i := range m.chunks {
 		m.selected[i] = true
@@ -151,11 +137,9 @@ func (m Model) updateAutoGroup() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// partialCommit stages selected diff chunks and commits them with an AI-generated commit message.
-func partialCommit(chunks []git.DiffChunk, selected map[int]bool, client *gogpt.Client) error {
+func partialCommit(chunks []git.DiffChunk, selected map[int]bool, client ai.AIClient) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-
 	patch, err := buildPatch(chunks, selected)
 	if err != nil {
 		return err
@@ -163,7 +147,6 @@ func partialCommit(chunks []git.DiffChunk, selected map[int]bool, client *gogpt.
 	if patch == "" {
 		return fmt.Errorf("no chunks selected")
 	}
-
 	cmd := exec.CommandContext(ctx, "git", "apply", "--cached", "-")
 	cmd.Stdin = strings.NewReader(patch)
 	cmd.Stdout = os.Stdout
@@ -171,7 +154,6 @@ func partialCommit(chunks []git.DiffChunk, selected map[int]bool, client *gogpt.
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to apply patch: %w", err)
 	}
-
 	partialDiff, err := git.GetGitDiff(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get partial diff: %w", err)
@@ -186,7 +168,6 @@ func partialCommit(chunks []git.DiffChunk, selected map[int]bool, client *gogpt.
 	return nil
 }
 
-// buildPatch constructs a patch string from the selected diff chunks.
 func buildPatch(chunks []git.DiffChunk, selected map[int]bool) (string, error) {
 	var sb strings.Builder
 	for i, c := range chunks {
@@ -208,8 +189,7 @@ func buildPatch(chunks []git.DiffChunk, selected map[int]bool) (string, error) {
 	return patch, nil
 }
 
-// generatePartialCommitMessage uses the partial diff to produce a commit message via OpenAI.
-func generatePartialCommitMessage(ctx context.Context, diff string, client *gogpt.Client) (string, error) {
+func generatePartialCommitMessage(ctx context.Context, diff string, client ai.AIClient) (string, error) {
 	prompt := fmt.Sprintf(`
 Generate a commit message for the following partial diff.
 The commit message must follow the Conventional Commits style.
@@ -218,8 +198,7 @@ Output ONLY the commit message.
 Diff:
 %s
 `, diff)
-
-	msg, err := openai.GetChatCompletion(ctx, client, prompt)
+	msg, err := client.GetCommitMessage(ctx, prompt)
 	if err != nil {
 		return "", fmt.Errorf("AI error: %w", err)
 	}
