@@ -1,7 +1,6 @@
 # AI-Commit
 <meta name="google-site-verification" content="rrrI2uW37GCMl4Zpv9o8m708e97_x6UjzqT8SUE5XKU" />
 
-
 **AI-Commit** is an AI-powered tool that automatically generates [Conventional Commits](https://www.conventionalcommits.org/) based on your staged changes. It leverages [OpenAI](https://openai.com/) to produce concise, readable commit messages and now includes an **experimental semantic release** feature for automated versioning and **interactive split** mode for partial commits. Inspired by [insulineru/ai-commit](https://github.com/insulineru/ai-commit).
 
 ---
