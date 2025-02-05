@@ -137,7 +137,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 
-	// Handle key messages.
 	case tea.KeyMsg:
 		switch m.state {
 		case stateShowCommit:
@@ -232,7 +231,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-	// Handle regeneration result.
 	case regenMsg:
 		if msg.err != nil {
 			m.result = fmt.Sprintf("Error generating commit message: %v", msg.err)
@@ -242,7 +240,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = stateShowCommit
 		}
 
-	// Handle commit result.
 	case commitResultMsg:
 		if msg.err != nil {
 			m.result = fmt.Sprintf("Commit failed: %v", msg.err)
@@ -250,22 +247,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.result = "Commit created successfully!"
 			m.state = stateResult
-			// Schedule an automatic quit after 2 seconds.
 			return m, autoQuitCmd()
 		}
 
-	// When receiving the autoQuitMsg, exit the TUI.
 	case autoQuitMsg:
 		return m, tea.Quit
 
-	// Update spinner during generating or committing states.
 	case spinner.TickMsg:
 		if m.state == stateGenerating || m.state == stateCommitting {
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
 		}
 	}
-
 	return m, cmd
 }
 

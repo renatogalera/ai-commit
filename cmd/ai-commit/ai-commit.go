@@ -70,7 +70,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	// Ensure we are in a Git repository (usando go-git)
+	// Ensure we are in a Git repository (using go-git)
 	if !git.CheckGitRepository(ctx) {
 		log.Error().Msg("This is not a Git repository.")
 		os.Exit(1)

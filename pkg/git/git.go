@@ -22,13 +22,10 @@ type DiffChunk struct {
 }
 
 // isBinary checks if the provided data is binary by scanning for a null byte.
-// This is a simple heuristic that works in many cases.
 func isBinary(data []byte) bool {
-	// An empty file is not considered binary.
 	if len(data) == 0 {
 		return false
 	}
-	// If a null byte is found, consider it binary.
 	return bytes.IndexByte(data, 0) != -1
 }
 
@@ -100,28 +97,34 @@ func CheckGitRepository(ctx context.Context) bool {
 }
 
 // GetGitDiff returns a unified diff of staged changes by comparing the HEAD tree and the working directory.
-// This version skips diffing files that are detected as binary.
+// It handles files that are deleted or renamed.
 func GetGitDiff(ctx context.Context) (string, error) {
+	// Open the Git repository in the current directory.
 	repo, err := git.PlainOpen(".")
 	if err != nil {
 		return "", fmt.Errorf("failed to open repository: %w", err)
 	}
 
+	// Get the HEAD reference.
 	headRef, err := repo.Head()
 	if err != nil {
-		return "", fmt.Errorf("failed to get HEAD reference: %w", err)
+		// If there's no HEAD (e.g., brand-new repo), compare against an empty state.
+		return getDiffAgainstEmpty(ctx, repo)
 	}
 
+	// Get the commit object for HEAD.
 	headCommit, err := repo.CommitObject(headRef.Hash())
 	if err != nil {
 		return "", fmt.Errorf("failed to get HEAD commit: %w", err)
 	}
 
+	// Retrieve the tree from the HEAD commit.
 	headTree, err := headCommit.Tree()
 	if err != nil {
 		return "", fmt.Errorf("failed to get HEAD tree: %w", err)
 	}
 
+	// Get the worktree to access staged changes.
 	wt, err := repo.Worktree()
 	if err != nil {
 		return "", fmt.Errorf("failed to get worktree: %w", err)
@@ -135,38 +138,50 @@ func GetGitDiff(ctx context.Context) (string, error) {
 	var diffResult strings.Builder
 	dmp := diffmatchpatch.New()
 
+	// Iterate over each file with changes.
 	for filePath, fileStatus := range status {
 		// Only process files that have staged changes.
 		if fileStatus.Staging == git.Unmodified {
 			continue
 		}
 
-		// Read the old content (from HEAD) if available.
+		// Collect the new file path and old file path.
+		// By default, both are set to filePath.
+		newPath := filePath
+		oldPath := filePath
+
+		// If the file is marked as renamed and fileStatus.Extra holds extra info,
+		// update oldPath with the original file name.
+		if fileStatus.Staging == git.Renamed && fileStatus.Extra != "" {
+			// fileStatus.Extra contains the original name when a rename is detected.
+			oldPath = fileStatus.Extra
+		}
+
+		// Read the old content from HEAD if available.
 		var oldContent string
-		fileInTree, err := headTree.File(filePath)
+		fileInTree, err := headTree.File(oldPath)
 		if err == nil {
 			reader, err := fileInTree.Blob.Reader()
 			if err == nil {
 				data, err := ioutil.ReadAll(reader)
-				reader.Close()
+				_ = reader.Close()
 				if err == nil {
 					oldContent = string(data)
 				}
 			}
 		}
 
-		// Read the new content from the file system.
-		newContentBytes, err := ioutil.ReadFile(filePath)
+		// If the file is deleted, there is no new content.
 		var newContent string
-		if err == nil {
-			// Skip binary files based on the new file content.
-			if isBinary(newContentBytes) {
-				// Optionally, you can print a message or log that a binary file was skipped.
-				continue
+		if fileStatus.Staging != git.Deleted {
+			newContentBytes, err := ioutil.ReadFile(newPath)
+			if err == nil {
+				// Skip binary files based on the new file content.
+				if isBinary(newContentBytes) {
+					continue
+				}
+				newContent = string(newContentBytes)
 			}
-			newContent = string(newContentBytes)
-		} else {
-			newContent = ""
 		}
 
 		// Generate a unified diff using diffmatchpatch.
@@ -174,6 +189,49 @@ func GetGitDiff(ctx context.Context) (string, error) {
 		patches := dmp.PatchMake(oldContent, newContent, diffs)
 		patchText := dmp.PatchToText(patches)
 
+		if strings.TrimSpace(patchText) != "" {
+			diffResult.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", oldPath, newPath))
+			diffResult.WriteString(patchText)
+			diffResult.WriteString("\n")
+		}
+	}
+
+	return diffResult.String(), nil
+}
+
+// UPDATED: Helper to produce diffs if there's no HEAD commit yet.
+func getDiffAgainstEmpty(ctx context.Context, repo *git.Repository) (string, error) {
+	wt, err := repo.Worktree()
+	if err != nil {
+		return "", fmt.Errorf("failed to get worktree: %w", err)
+	}
+	status, err := wt.Status()
+	if err != nil {
+		return "", fmt.Errorf("failed to get worktree status: %w", err)
+	}
+
+	var diffResult strings.Builder
+	dmp := diffmatchpatch.New()
+
+	for filePath, fileStatus := range status {
+		if fileStatus.Staging == git.Unmodified {
+			continue
+		}
+		// No old content
+		oldContent := ""
+		var newContent string
+
+		// If it's not a deletion, read the new file content
+		if fileStatus.Staging != git.Deleted {
+			newContentBytes, err := ioutil.ReadFile(filePath)
+			if err == nil && !isBinary(newContentBytes) {
+				newContent = string(newContentBytes)
+			}
+		}
+
+		diffs := dmp.DiffMain(oldContent, newContent, true)
+		patches := dmp.PatchMake(oldContent, newContent, diffs)
+		patchText := dmp.PatchToText(patches)
 		if strings.TrimSpace(patchText) != "" {
 			diffResult.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", filePath, filePath))
 			diffResult.WriteString(patchText)

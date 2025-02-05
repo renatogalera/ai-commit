@@ -15,7 +15,7 @@ import (
 // GetChatCompletion calls the OpenAI API and returns the generated commit message.
 func GetChatCompletion(ctx context.Context, client *gogpt.Client, prompt string) (string, error) {
 	req := gogpt.ChatCompletionRequest{
-		Model: gogpt.GPT4oLatest,
+		Model: gogpt.GPT4oLatest, // Or GPT-3.5, etc.
 		Messages: []gogpt.ChatCompletionMessage{
 			{
 				Role:    gogpt.ChatMessageRoleUser,
