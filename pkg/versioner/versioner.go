@@ -65,19 +65,16 @@ func CreateLocalTag(ctx context.Context, newVersionTag string) error {
 		return errors.New("no version tag provided")
 	}
 
-	// Open the local Git repository.
 	repo, err := git.PlainOpen(".")
 	if err != nil {
 		return fmt.Errorf("failed to open repository: %w", err)
 	}
 
-	// Retrieve the current HEAD reference.
 	headRef, err := repo.Head()
 	if err != nil {
 		return fmt.Errorf("failed to get HEAD reference: %w", err)
 	}
 
-	// Create a new tag pointing to HEAD.
 	_, err = repo.CreateTag(newVersionTag, headRef.Hash(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create tag %s: %w", newVersionTag, err)
