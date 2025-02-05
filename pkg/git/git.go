@@ -109,7 +109,7 @@ func GetGitDiff(ctx context.Context) (string, error) {
 	headRef, err := repo.Head()
 	if err != nil {
 		// If there's no HEAD (e.g., brand-new repo), compare against an empty state.
-		return getDiffAgainstEmpty(ctx, repo)
+		return getDiffAgainstEmpty(repo)
 	}
 
 	// Get the commit object for HEAD.
@@ -200,7 +200,7 @@ func GetGitDiff(ctx context.Context) (string, error) {
 }
 
 // UPDATED: Helper to produce diffs if there's no HEAD commit yet.
-func getDiffAgainstEmpty(ctx context.Context, repo *git.Repository) (string, error) {
+func getDiffAgainstEmpty(repo *git.Repository) (string, error) {
 	wt, err := repo.Worktree()
 	if err != nil {
 		return "", fmt.Errorf("failed to get worktree: %w", err)
