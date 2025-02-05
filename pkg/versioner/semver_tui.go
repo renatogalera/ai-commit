@@ -9,13 +9,13 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// semverChoice represents one line in our TUI – major/minor/patch, plus the resulting version string.
+// semverChoice representa uma linha na nossa TUI – major/minor/patch, mais a string de versão resultante.
 type semverChoice struct {
 	label  string
 	detail string
 }
 
-// semverModel is our Bubble Tea model for picking a new semver.
+// semverModel é o nosso modelo Bubble Tea para escolher um novo semver.
 type semverModel struct {
 	choices       []semverChoice
 	cursor        int
@@ -75,11 +75,11 @@ func (m semverModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m semverModel) View() string {
 	if m.selected {
-		return fmt.Sprintf("You selected %s. Press any key to exit.\n", m.selectedValue)
+		return fmt.Sprintf("Selecionou %s. Pressione qualquer tecla para sair.\n", m.selectedValue)
 	}
 
-	s := fmt.Sprintf("Current version: %s\n\n", m.currentVer)
-	s += "Select the next version (↑/↓, enter, or q to quit):\n\n"
+	s := fmt.Sprintf("Versão atual: %s\n\n", m.currentVer)
+	s += "Selecione a próxima versão (↑/↓, enter ou q para sair):\n\n"
 	for i, choice := range m.choices {
 		cursor := " "
 		if i == m.cursor {
@@ -90,7 +90,7 @@ func (m semverModel) View() string {
 	return s + "\n"
 }
 
-// RunSemVerTUI runs the TUI program and returns the chosen version or empty if canceled.
+// RunSemVerTUI executa o programa TUI e retorna a versão escolhida ou vazio se cancelado.
 func RunSemVerTUI(ctx context.Context, currentVersion string) (string, error) {
 	initialModel := NewSemverModel(currentVersion)
 	p := tea.NewProgram(initialModel)
@@ -101,7 +101,7 @@ func RunSemVerTUI(ctx context.Context, currentVersion string) (string, error) {
 
 	m, ok := finalModel.(semverModel)
 	if !ok {
-		return "", fmt.Errorf("unexpected model type")
+		return "", fmt.Errorf("tipo de modelo inesperado")
 	}
 	if !m.selected {
 		return "", nil

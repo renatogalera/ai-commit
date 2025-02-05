@@ -12,19 +12,19 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"golang.org/x/mod/semver"
 
-	"github.com/renatogalera/ai-commit/pkg/openai"
-	gogpt "github.com/sashabaranov/go-openai"
+	"github.com/renatogalera/ai-commit/pkg/ai" // Import AI Client Interface
+	// Still using OpenAI utils for prompt - can abstract later
 )
 
-// GetCurrentVersionTag retrieves the most recent Git tag that matches semantic versioning using go-git.
+// GetCurrentVersionTag recupera a tag Git mais recente que corresponde ao versionamento semântico usando go-git.
 func GetCurrentVersionTag(ctx context.Context) (string, error) {
 	repo, err := git.PlainOpen(".")
 	if err != nil {
-		return "", fmt.Errorf("failed to open repository: %w", err)
+		return "", fmt.Errorf("falha ao abrir repositório: %w", err)
 	}
 	tagIter, err := repo.Tags()
 	if err != nil {
-		return "", fmt.Errorf("failed to get tags: %w", err)
+		return "", fmt.Errorf("falha ao obter tags: %w", err)
 	}
 	var latestTag string
 	err = tagIter.ForEach(func(ref *plumbing.Reference) error {
@@ -42,42 +42,42 @@ func GetCurrentVersionTag(ctx context.Context) (string, error) {
 	return latestTag, nil
 }
 
-// SuggestNextVersion uses OpenAI to suggest the next semantic version based on the commit message.
-func SuggestNextVersion(ctx context.Context, currentVersion, commitMsg string, client *gogpt.Client) (string, error) {
+// SuggestNextVersion usa OpenAI para sugerir a próxima versão semântica com base na mensagem de commit.
+func SuggestNextVersion(ctx context.Context, currentVersion, commitMsg string, client ai.AIClient) (string, error) { // Use AI Client Interface
 	if currentVersion == "" {
 		currentVersion = "v0.0.0"
 	}
 	prompt := buildVersionPrompt(currentVersion, commitMsg)
-	aiResponse, err := openai.GetChatCompletion(ctx, client, prompt)
+	aiResponse, err := client.GetCommitMessage(ctx, prompt) // Use AI Client Interface
 	if err != nil {
-		return "", fmt.Errorf("failed to get version suggestion: %w", err)
+		return "", fmt.Errorf("falha ao obter sugestão de versão: %w", err)
 	}
 
 	suggested, err := parseAiVersionSuggestion(aiResponse, currentVersion)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse AI version suggestion: %w", err)
+		return "", fmt.Errorf("falha ao analisar sugestão de versão AI: %w", err)
 	}
 	return suggested, nil
 }
 
 func CreateLocalTag(ctx context.Context, newVersionTag string) error {
 	if newVersionTag == "" {
-		return errors.New("no version tag provided")
+		return errors.New("nenhuma tag de versão fornecida")
 	}
 
 	repo, err := git.PlainOpen(".")
 	if err != nil {
-		return fmt.Errorf("failed to open repository: %w", err)
+		return fmt.Errorf("falha ao abrir repositório: %w", err)
 	}
 
 	headRef, err := repo.Head()
 	if err != nil {
-		return fmt.Errorf("failed to get HEAD reference: %w", err)
+		return fmt.Errorf("falha ao obter referência HEAD: %w", err)
 	}
 
 	_, err = repo.CreateTag(newVersionTag, headRef.Hash(), nil)
 	if err != nil {
-		return fmt.Errorf("failed to create tag %s: %w", newVersionTag, err)
+		return fmt.Errorf("falha ao criar tag %s: %w", newVersionTag, err)
 	}
 
 	return nil
@@ -85,17 +85,17 @@ func CreateLocalTag(ctx context.Context, newVersionTag string) error {
 
 func buildVersionPrompt(currentVersion, commitMsg string) string {
 	return fmt.Sprintf(`
-We are using semantic versioning, where a version is defined as MAJOR.MINOR.PATCH.
-The current version is %s.
-The latest commit message is:
+Estamos a usar versionamento semântico, onde uma versão é definida como MAJOR.MINOR.PATCH.
+A versão atual é %s.
+A última mensagem de commit é:
 "%s"
 
-Based on the commit message, determine if the next version is:
-- MAJOR update if it introduces breaking changes
-- MINOR update if it adds new features
-- PATCH update if it's a fix or small improvement
+Com base na mensagem de commit, determine se a próxima versão é:
+- atualização MAJOR se introduzir alterações interruptivas
+- atualização MINOR se adicionar novas funcionalidades
+- atualização PATCH se for uma correção ou pequena melhoria
 
-Please output the next version in the format vX.Y.Z without extra explanation.
+Por favor, apresente a próxima versão no formato vX.Y.Z sem explicação extra.
 `, currentVersion, commitMsg)
 }
 
