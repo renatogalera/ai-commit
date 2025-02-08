@@ -3,6 +3,12 @@
 # Which AI model to use. Valid options: "openai" or "gemini"
 modelName: "openai"
 
+# OpenAI model to use.
+openaiModel: "gpt-4olatest"                
+
+# Gemini model to use.
+geminiModel: "models/gemini-2.0-flash" 
+
 # API key for OpenAI. Overridden by the --apiKey flag or the OPENAI_API_KEY environment variable.
 openAiApiKey: "sk-your-openai-key"
 
