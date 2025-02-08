@@ -14,6 +14,9 @@
   - [Configuration](#configuration)
     - [OpenAI API Key](#openai-api-key)
     - [Gemini API Key](#gemini-api-key)
+    - [AI Model Selection](#ai-model-selection)
+      - [Using config.yaml](#using-configyaml)
+      - [Using Command-Line Flags](#using-command-line-flags)
     - [Custom Templates](#custom-templates)
     - [Semantic Release](#semantic-release)
   - [Usage](#usage)
@@ -53,7 +56,7 @@
    Automatically suggests a new semantic version tag (`MAJOR.MINOR.PATCH`) based on commit content and optionally creates a new Git tag.
 
 7. **Interactive Commit Splitting**  
-   Split large diffs into multiple smaller commits via an interactive TUI that shows each “chunk” of changes. Each partial commit can also be assigned an AI-generated commit message.
+   Split large diffs into multiple smaller commits via an interactive TUI that shows each “chunk” of changes. Each partial commit is also assigned an AI-generated commit message.
 
 8. **Optional Emoji Prefix**  
    Add an emoji prefix to your commit message if desired.
@@ -121,7 +124,37 @@ If you prefer to use the new Gemini model, you must provide your Gemini API key 
   export GEMINI_API_KEY=YOUR_GEMINI_API_KEY
   ```
 
-Then specify the Gemini provider using the `--model` flag (see below).
+### AI Model Selection
+
+You can choose the AI model provider to generate commit messages via two methods: using CLI flags or via the configuration file.
+
+#### Using config.yaml
+
+The configuration file is located at `~/.config/ai-commit/config.yaml`. It includes the following fields related to AI model selection:
+
+- **`modelName`**  
+  Defines the AI model provider. Set to either `openai` or `gemini`. If not specified, the default is `openai`.
+  
+- **`openaiModel`**  
+  Specifies the OpenAI model to use (e.g., `gogpt.GPT4oLatest`). This is used if `modelName` is set to `openai`.
+
+- **`geminiModel`**  
+  Specifies the Gemini model to use (e.g., `models/gemini-2.0-flash`). This is used if `modelName` is set to `gemini`.
+
+#### Using Command-Line Flags
+
+These settings can be overridden at runtime via the following flags:
+
+- **`--model`**  
+  Selects the AI model provider (`openai` or `gemini`). This flag overrides the `modelName` value in config.yaml.
+
+- **`--openai-model`**  
+  Specifies the OpenAI model to use. Overrides the `openaiModel` value in config.yaml.
+
+- **`--gemini-model`**  
+  Specifies the Gemini model to use. Overrides the `geminiModel` value in config.yaml.
+
+**Note:** If you select `gemini` as your model, ensure you also provide your Gemini API key via the `--geminiApiKey` flag or the `GEMINI_API_KEY` environment variable. Similarly, for OpenAI, supply your key via `--apiKey` or the `OPENAI_API_KEY` environment variable.
 
 ### Custom Templates
 
@@ -156,24 +189,40 @@ Run **ai-commit** inside a Git repository with staged changes.
 
 - **`--apiKey`**  
   Your OpenAI API key. If not set, the tool looks for `OPENAI_API_KEY`.
+
 - **`--geminiApiKey`**  
   Your Gemini API key. If not set, the tool looks for `GEMINI_API_KEY`. Use this when you wish to select Gemini as your AI provider.
+
 - **`--model`**  
-  Select the AI model to use. Acceptable values are `openai` (default) or `gemini`.
+  Select the AI model provider to use. Valid options are `openai` (default) or `gemini`. This flag overrides the `modelName` setting in config.yaml.
+
+- **`--openai-model`**  
+  Specify the OpenAI model to be used (e.g., `gpt-4` or `gogpt.GPT4oLatest`). Overrides the `openaiModel` setting in config.yaml.
+
+- **`--gemini-model`**  
+  Specify the Gemini model to be used (e.g., `models/gemini-2.0-flash`). Overrides the `geminiModel` setting in config.yaml.
+
 - **`--commit-type`**  
   Specify a commit type (`feat`, `fix`, `docs`, etc.). Otherwise the tool may infer it.
+
 - **`--template`**  
   Custom template for your commit message.
+
 - **`--force`**  
   Automatically commit without interactive confirmation.
+
 - **`--language`**  
   Language used in AI generation (default `english`).
+
 - **`--semantic-release`**  
   Triggers AI-assisted version bumping and release tasks (see [Semantic Release](#semantic-release)).
+
 - **`--manual-semver`**  
   When used with `--semantic-release`, launches a TUI to manually select the next version (major/minor/patch).
+
 - **`--interactive-split`**  
   Launches an interactive TUI to split staged changes into multiple partial commits.
+
 - **`--emoji`**  
   Includes an emoji prefix in your commit message if specified.
 
@@ -287,19 +336,16 @@ ai-commit --model gemini --geminiApiKey YOUR_GEMINI_API_KEY
 ```
 
 - **`--model gemini`**  
-  Selects the Gemini provider.
+  Selects the Gemini provider (overrides the config.yaml `modelName`).
 - **`--geminiApiKey`**  
-  Supplies your Gemini API key. Alternatively, set the environment variable:
+  Supplies your Gemini API key.
+- **`--gemini-model`**  
+  (Optional) Specify the Gemini model to use. If not provided, the default from config.yaml (`models/gemini-2.0-flash`) is used.
 
-  ```bash
-  export GEMINI_API_KEY=YOUR_GEMINI_API_KEY
-  ```
-
-Gemini integrates with AI-Commit in the same way as OpenAI, using the unified `AIClient` interface. All other flags and the interactive TUI flow remain the same.
+All other flags and the interactive TUI flow remain the same.
 
 ---
 
 ## License
 
 This project is released under the [MIT License](LICENSE.md). Please see the LICENSE file for details.
-```
