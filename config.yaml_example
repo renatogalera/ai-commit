@@ -1,0 +1,29 @@
+# config.yaml
+
+# Which AI model to use. Valid options: "openai" or "gemini"
+modelName: "openai"
+
+# API key for OpenAI. Overridden by the --apiKey flag or the OPENAI_API_KEY environment variable.
+openAiApiKey: "sk-your-openai-key"
+
+# API key for Gemini. Overridden by the --geminiApiKey flag or the GEMINI_API_KEY environment variable.
+geminiApiKey: ""
+
+# Default commit type (e.g. feat, fix, docs, etc.). Overridden by --commit-type flag.
+commitType: "feat"
+
+# Whether to suggest/tag a new version automatically after commit. Overridden by --semantic-release flag.
+semanticRelease: false
+
+# Whether to split changes into multiple commits interactively. Overridden by --interactive-split flag.
+interactiveSplit: false
+
+# Whether to include an emoji prefix in commit messages. Overridden by --emoji flag.
+enableEmoji: false
+
+# A default commit message template, for example "Modified {GIT_BRANCH} | {COMMIT_MESSAGE}".
+template: ""
+
+# A default prompt seed. Typically built automatically from the staged diff, but you can add extra text here.
+prompt: ""
+
