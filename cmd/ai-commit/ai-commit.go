@@ -44,16 +44,33 @@ type Config struct {
 	OpenAIAPIKey     string `yaml:"openAiApiKey,omitempty"`
 }
 
-// LoadOrCreateConfig attempts to read `config.yaml` from the binary's directory. If not found,
-// it creates a config file with default values, then returns that. You can override these values
-// later with CLI flags or environment variables.
+// LoadOrCreateConfig attempts to read config.yaml from $HOME/.config/$BINARY_NAME/config.yaml.
+// If not found, it creates a config file with default values, then returns that.
 func LoadOrCreateConfig() (*Config, error) {
+	// Get the path of the executable.
 	exePath, err := os.Executable()
 	if err != nil {
 		return nil, fmt.Errorf("could not determine executable path: %w", err)
 	}
+	// Extract the binary name.
+	binaryName := filepath.Base(exePath)
 
-	configPath := filepath.Join(filepath.Dir(exePath), "config.yaml")
+	// Get the user's home directory.
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("could not determine user home directory: %w", err)
+	}
+
+	// Construct the config directory and file path: $HOME/.config/$BINARY_NAME/config.yaml
+	configDir := filepath.Join(homeDir, ".config", binaryName)
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	// Create the config directory if it does not exist.
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(configDir, 0o755); err != nil {
+			return nil, fmt.Errorf("failed to create config directory %s: %w", configDir, err)
+		}
+	}
 
 	// If config.yaml doesn't exist, create it with some sensible defaults:
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -106,7 +123,7 @@ func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
-	// 1) Load config from config.yaml or create a default one if missing.
+	// 1) Load config from $HOME/.config/$BINARY_NAME/config.yaml or create a default one if missing.
 	cfgFile, err := LoadOrCreateConfig()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load config.yaml")
