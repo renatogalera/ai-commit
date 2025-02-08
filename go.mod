@@ -13,6 +13,7 @@ require (
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
 	golang.org/x/mod v0.17.0
 	google.golang.org/api v0.220.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
