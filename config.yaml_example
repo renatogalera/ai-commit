@@ -12,15 +12,6 @@ geminiApiKey: ""
 # Default commit type (e.g. feat, fix, docs, etc.). Overridden by --commit-type flag.
 commitType: "feat"
 
-# Whether to suggest/tag a new version automatically after commit. Overridden by --semantic-release flag.
-semanticRelease: false
-
-# Whether to split changes into multiple commits interactively. Overridden by --interactive-split flag.
-interactiveSplit: false
-
-# Whether to include an emoji prefix in commit messages. Overridden by --emoji flag.
-enableEmoji: false
-
 # A default commit message template, for example "Modified {GIT_BRANCH} | {COMMIT_MESSAGE}".
 template: ""
 
