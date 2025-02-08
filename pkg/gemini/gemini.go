@@ -23,10 +23,9 @@ func NewGeminiProClient(ctx context.Context, apiKey string) (*genai.GenerativeMo
 	if err != nil {
 		return nil, fmt.Errorf("error creating gemini client: %w", err)
 	}
-	model := client.GenerativeModel("gemini-pro")
+	model := client.GenerativeModel("models/gemini-2.0-flash")
 	return model, nil
 }
-
 func (gc *GeminiClient) GetCommitMessage(ctx context.Context, prompt string) (string, error) {
 	resp, err := gc.client.GenerateContent(ctx, genai.Text(prompt))
 	if err != nil {

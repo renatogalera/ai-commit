@@ -30,4 +30,3 @@ func BuildPrompt(diff, language, commitType, additionalText string) string {
 	}
 	return sb.String()
 }
-
