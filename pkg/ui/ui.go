@@ -288,7 +288,7 @@ func regenerate(prompt string, client ai.AIClient, commitType string, tmpl strin
 	}
 	result = openai.SanitizeOpenAIResponse(result, commitType)
 	if enableEmoji {
-		result = openai.AddGitmoji(result, commitType)
+		result = ai.AddGitmoji(result, commitType)
 	}
 	if tmpl != "" {
 		result, err = template.ApplyTemplate(tmpl, result)

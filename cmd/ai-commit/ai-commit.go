@@ -30,8 +30,7 @@ import (
 
 const defaultTimeout = 60 * time.Second
 
-// Config represents both our CLI flags/environment overrides AND what we want in config.yaml.
-// You may add or remove fields as you see fit.
+// Config represents both our CLI flags/environment overrides and our config.yaml settings.
 type Config struct {
 	Prompt           string `yaml:"prompt,omitempty"`
 	CommitType       string `yaml:"commitType,omitempty"`
@@ -39,13 +38,15 @@ type Config struct {
 	SemanticRelease  bool   `yaml:"semanticRelease,omitempty"`
 	InteractiveSplit bool   `yaml:"interactiveSplit,omitempty"`
 	EnableEmoji      bool   `yaml:"enableEmoji,omitempty"`
-	ModelName        string `yaml:"modelName,omitempty"`
+	ModelName        string `yaml:"modelName,omitempty"` // "openai" or "gemini"
 	GeminiAPIKey     string `yaml:"geminiApiKey,omitempty"`
 	OpenAIAPIKey     string `yaml:"openAiApiKey,omitempty"`
+	OpenAIModel      string `yaml:"openaiModel,omitempty"` // e.g. gogpt.GPT4oLatest
+	GeminiModel      string `yaml:"geminiModel,omitempty"` // e.g. "models/gemini-2.0-flash"
 }
 
-// LoadOrCreateConfig attempts to read config.yaml from $HOME/.config/$BINARY_NAME/config.yaml.
-// If not found, it creates a config file with default values, then returns that.
+// LoadOrCreateConfig reads the config from $HOME/.config/$BINARY_NAME/config.yaml,
+// or creates a default config file if none exists.
 func LoadOrCreateConfig() (*Config, error) {
 	// Get the path of the executable.
 	exePath, err := os.Executable()
@@ -61,7 +62,7 @@ func LoadOrCreateConfig() (*Config, error) {
 		return nil, fmt.Errorf("could not determine user home directory: %w", err)
 	}
 
-	// Construct the config directory and file path: $HOME/.config/$BINARY_NAME/config.yaml
+	// Construct the config directory and file path.
 	configDir := filepath.Join(homeDir, ".config", binaryName)
 	configPath := filepath.Join(configDir, "config.yaml")
 
@@ -72,7 +73,7 @@ func LoadOrCreateConfig() (*Config, error) {
 		}
 	}
 
-	// If config.yaml doesn't exist, create it with some sensible defaults:
+	// If config.yaml doesn't exist, create it with sensible defaults.
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultCfg := &Config{
 			Prompt:           "",
@@ -84,6 +85,8 @@ func LoadOrCreateConfig() (*Config, error) {
 			ModelName:        "openai", // or "gemini"
 			GeminiAPIKey:     "",
 			OpenAIAPIKey:     "",
+			OpenAIModel:      gogpt.GPT4oLatest,         // default for OpenAI
+			GeminiModel:      "models/gemini-2.0-flash", // default for Gemini
 		}
 		if err := saveConfig(configPath, defaultCfg); err != nil {
 			return nil, fmt.Errorf("failed to create default config.yaml: %w", err)
@@ -119,18 +122,18 @@ func saveConfig(path string, cfg *Config) error {
 }
 
 func main() {
-	// Initialize logging
+	// Initialize logging.
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
-	// 1) Load config from $HOME/.config/$BINARY_NAME/config.yaml or create a default one if missing.
+	// Load or create config.
 	cfgFile, err := LoadOrCreateConfig()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load config.yaml")
 		os.Exit(1)
 	}
 
-	// 2) Create flags that can override config.yaml values
+	// Create CLI flags (overriding config.yaml values if provided).
 	apiKeyFlag := flag.String("apiKey", "", "OpenAI API key (or set OPENAI_API_KEY environment variable)")
 	languageFlag := flag.String("language", "english", "Language for the commit message")
 	commitTypeFlag := flag.String("commit-type", cfgFile.CommitType, "Commit type (e.g. feat, fix, docs)")
@@ -141,11 +144,14 @@ func main() {
 	emojiFlag := flag.Bool("emoji", cfgFile.EnableEmoji, "Include an emoji prefix in commit message")
 	manualSemverFlag := flag.Bool("manual-semver", false, "Pick the next version manually (major/minor/patch) instead of AI suggestion")
 	modelFlag := flag.String("model", cfgFile.ModelName, "AI model to use (openai or gemini)")
-	geminiAPIKeyFlag := flag.String("geminiApiKey", cfgFile.GeminiAPIKey, "Google Gemini API key (or set GEMINI_API_KEY environment variable)")
+	geminiAPIKeyFlag := flag.String("geminiApiKey", cfgFile.GeminiAPIKey, "Gemini API key (or set GEMINI_API_KEY environment variable)")
+	// New flags for specifying the AI models.
+	openaiModelFlag := flag.String("openai-model", cfgFile.OpenAIModel, "OpenAI model to use")
+	geminiModelFlag := flag.String("gemini-model", cfgFile.GeminiModel, "Gemini model to use")
 
 	flag.Parse()
 
-	// 3) Apply final values in code: flags > environment variables > config.yaml
+	// Apply final configuration: flags > environment variables > config.yaml.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -160,14 +166,11 @@ func main() {
 	}
 
 	if modelName == "openai" {
-		// If the user passed a flag, that overrides environment or config file
 		apiKey = *apiKeyFlag
 		if apiKey == "" {
-			// If still empty, try environment variable
 			apiKey = os.Getenv("OPENAI_API_KEY")
 		}
 		if apiKey == "" {
-			// If still empty, use config.yaml
 			apiKey = cfgFile.OpenAIAPIKey
 		}
 		if apiKey == "" {
@@ -175,7 +178,8 @@ func main() {
 			os.Exit(1)
 		}
 		openAIClient := gogpt.NewClient(apiKey)
-		aiClient = openai.NewOpenAIClient(openAIClient)
+		// Pass the configurable OpenAI model.
+		aiClient = openai.NewOpenAIClient(openAIClient, *openaiModelFlag)
 	} else if modelName == "gemini" {
 		apiKey = *geminiAPIKeyFlag
 		if apiKey == "" {
@@ -185,7 +189,8 @@ func main() {
 			log.Error().Msg("Gemini API key is required (flag --geminiApiKey, env GEMINI_API_KEY, or config.yaml).")
 			os.Exit(1)
 		}
-		geminiClient, err := gemini.NewGeminiProClient(ctx, apiKey)
+		// Pass the configurable Gemini model.
+		geminiClient, err := gemini.NewGeminiProClient(ctx, apiKey, *geminiModelFlag)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to initialize Gemini client")
 			os.Exit(1)
@@ -240,7 +245,7 @@ func main() {
 	diff, _ = openai.MaybeSummarizeDiff(diff, 5000)
 	promptText := prompt.BuildPrompt(diff, *languageFlag, *commitTypeFlag, "")
 
-	// We store final, merged config for clarity (flags > config):
+	// Final merged config (flags > config):
 	cfg := Config{
 		Prompt:          promptText,
 		CommitType:      *commitTypeFlag,
@@ -250,6 +255,8 @@ func main() {
 		ModelName:       modelName,
 		GeminiAPIKey:    *geminiAPIKeyFlag,
 		OpenAIAPIKey:    apiKey,
+		OpenAIModel:     *openaiModelFlag,
+		GeminiModel:     *geminiModelFlag,
 	}
 
 	commitMsg, err := generateCommitMessage(ctx, aiClient, cfg.Prompt, cfg.CommitType, cfg.Template, cfg.EnableEmoji)
@@ -311,7 +318,7 @@ func generateCommitMessage(ctx context.Context, client ai.AIClient, prompt strin
 	}
 	res = openai.SanitizeOpenAIResponse(res, commitType)
 	if enableEmoji {
-		res = openai.AddGitmoji(res, commitType)
+		res = ai.AddGitmoji(res, commitType)
 	}
 	if templateStr != "" {
 		res, err = template.ApplyTemplate(templateStr, res)

@@ -15,15 +15,20 @@ import (
 
 type OpenAIClient struct {
 	client *gogpt.Client
+	model  string
 }
 
-func NewOpenAIClient(client *gogpt.Client) *OpenAIClient {
-	return &OpenAIClient{client: client}
+// NewOpenAIClient creates a new OpenAIClient using the provided client and model.
+func NewOpenAIClient(client *gogpt.Client, model string) *OpenAIClient {
+	return &OpenAIClient{
+		client: client,
+		model:  model,
+	}
 }
 
 func (oc *OpenAIClient) GetCommitMessage(ctx context.Context, prompt string) (string, error) {
 	req := gogpt.ChatCompletionRequest{
-		Model: gogpt.GPT4oLatest,
+		Model: oc.model,
 		Messages: []gogpt.ChatCompletionMessage{
 			{
 				Role:    gogpt.ChatMessageRoleUser,
@@ -66,57 +71,6 @@ func SanitizeOpenAIResponse(msg, commitType string) string {
 		msg = strings.Join(lines, "\n")
 	}
 	return strings.TrimSpace(msg)
-}
-
-func AddGitmoji(message, commitType string) string {
-	if commitType == "" {
-		lowerMsg := strings.ToLower(message)
-		switch {
-		case strings.Contains(lowerMsg, "fix"):
-			commitType = "fix"
-		case strings.Contains(lowerMsg, "add"), strings.Contains(lowerMsg, "create"), strings.Contains(lowerMsg, "introduce"):
-			commitType = "feat"
-		case strings.Contains(lowerMsg, "doc"):
-			commitType = "docs"
-		case strings.Contains(lowerMsg, "refactor"):
-			commitType = "refactor"
-		case strings.Contains(lowerMsg, "test"):
-			commitType = "test"
-		case strings.Contains(lowerMsg, "perf"):
-			commitType = "perf"
-		case strings.Contains(lowerMsg, "build"):
-			commitType = "build"
-		case strings.Contains(lowerMsg, "ci"):
-			commitType = "ci"
-		case strings.Contains(lowerMsg, "chore"):
-			commitType = "chore"
-		}
-	}
-	if commitType == "" {
-		return message
-	}
-	gitmojis := map[string]string{
-		"feat":     "✨",
-		"fix":      "🐛",
-		"docs":     "📚",
-		"style":    "💎",
-		"refactor": "♻️",
-		"test":     "🧪",
-		"chore":    "🔧",
-		"perf":     "🚀",
-		"build":    "📦",
-		"ci":       "👷",
-	}
-	prefix := commitType
-	if emoji, ok := gitmojis[commitType]; ok {
-		prefix = fmt.Sprintf("%s %s", emoji, commitType)
-	}
-	emojiPattern := committypes.BuildRegexPatternWithEmoji()
-	if matches := emojiPattern.FindStringSubmatch(message); len(matches) > 0 {
-		cleanMsg := emojiPattern.ReplaceAllString(message, "")
-		return fmt.Sprintf("%s: %s", prefix, strings.TrimSpace(cleanMsg))
-	}
-	return fmt.Sprintf("%s: %s", prefix, message)
 }
 
 var _ ai.AIClient = (*OpenAIClient)(nil)
