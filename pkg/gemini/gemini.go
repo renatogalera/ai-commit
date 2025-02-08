@@ -14,18 +14,21 @@ type GeminiClient struct {
 	client *genai.GenerativeModel
 }
 
+// NewClient creates a new GeminiClient from the provided generative model.
 func NewClient(client *genai.GenerativeModel) *GeminiClient {
 	return &GeminiClient{client: client}
 }
 
-func NewGeminiProClient(ctx context.Context, apiKey string) (*genai.GenerativeModel, error) {
+// NewGeminiProClient creates a new Gemini generative model client using the provided API key and model name.
+func NewGeminiProClient(ctx context.Context, apiKey string, modelName string) (*genai.GenerativeModel, error) {
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
 		return nil, fmt.Errorf("error creating gemini client: %w", err)
 	}
-	model := client.GenerativeModel("models/gemini-2.0-flash")
+	model := client.GenerativeModel(modelName)
 	return model, nil
 }
+
 func (gc *GeminiClient) GetCommitMessage(ctx context.Context, prompt string) (string, error) {
 	resp, err := gc.client.GenerateContent(ctx, genai.Text(prompt))
 	if err != nil {
