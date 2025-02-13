@@ -318,7 +318,7 @@ func generateCommitMessage(ctx context.Context, client ai.AIClient, prompt strin
 	}
 	res = openai.SanitizeOpenAIResponse(res, commitType)
 	if enableEmoji {
-		res = ai.AddGitmoji(res, commitType)
+		res = git.AddGitmoji(res, commitType)
 	}
 	if templateStr != "" {
 		res, err = template.ApplyTemplate(templateStr, res)
