@@ -37,14 +37,11 @@ A `config.yaml` is auto-created at `~/.config/ai-commit/config.yaml` with defaul
 modelName: "openai"
 openAiApiKey: "sk-YOUR-OPENAI-KEY"
 openaiModel: "gpt-4"
-geminiApiKey: ""
+geminiApiKey: "YOUR-GEMINI-KEY"
 geminiModel: "models/gemini-2.0-flash"
-anthropicApiKey: ""
+anthropicApiKey: "sk-YOUR-ANTHROPIC-KEY"
 anthropicModel: "claude-3-5-sonnet-latest"
-commitType: ""
 template: ""
-semanticRelease: false
-interactiveSplit: false
 enableEmoji: false
 prompt: ""
 authorName: "Your Name"
@@ -101,9 +98,13 @@ Common flags:
    ```bash
    ai-commit --semantic-release
    ```
-4. **Anthropic**:
+4. **Model**:
    ```bash
-   ai-commit --model anthropic --anthropicApiKey YOUR_CLAUDE_KEY
+   ai-commit --model anthropic --anthropicApiKey YOUR_CLAUDE_KE
+
+   ai-commit --model gemini --geminiApiKey YOUR_GEMINI_KEY
+
+   ai-commit --model openai --openaiApiKey YOUR_OPENAI_KEY
    ```
 5. **Interactive Split**:
    ```bash
