@@ -1,6 +1,13 @@
 # AI-Commit
 
-**AI-Commit** is a tool that generates [Conventional Commits](https://www.conventionalcommits.org/) using AI. It supports **OpenAI**, **Google Gemini**, and **Anthropic Claude**. It can also optionally perform an AI-assisted semantic release or split staged changes into multiple partial commits.
+**AI-Commit** is a tool that generates [Conventional Commits](https://www.conventionalcommits.org/) using AI. 
+
+It supports   
+- **OpenAI**
+- **Google Gemini**
+- **Anthropic Claude**. 
+   
+It can also optionally perform an AI-assisted semantic release or split staged changes into multiple partial commits.
 
 ## Features
 
@@ -40,6 +47,8 @@ semanticRelease: false
 interactiveSplit: false
 enableEmoji: false
 prompt: ""
+authorName: "Your Name"
+authorEmail: "youremail@example.com"
 ```
 
 *Any CLI flags override these config values.* You can also specify keys via environment variables:

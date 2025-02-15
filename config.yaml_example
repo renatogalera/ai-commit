@@ -1,5 +1,10 @@
 # config.yaml
 
+# Your name and email address for git commits.
+authorName: "Your Name"
+authorEmail: "youremail@example.com"
+
+
 # Which AI model to use. Valid options: "openai", "gemini" or "anthropic"
 modelName: "openai"
 
