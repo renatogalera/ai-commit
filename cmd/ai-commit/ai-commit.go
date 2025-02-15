@@ -17,7 +17,7 @@ import (
 	gogpt "github.com/sashabaranov/go-openai"
 
 	"github.com/renatogalera/ai-commit/pkg/ai"
-	"github.com/renatogalera/ai-commit/pkg/anthropic" // new Anthropic provider package
+	"github.com/renatogalera/ai-commit/pkg/anthropic"
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/gemini"
 	"github.com/renatogalera/ai-commit/pkg/git"
@@ -39,44 +39,45 @@ type Config struct {
 	SemanticRelease  bool   `yaml:"semanticRelease,omitempty"`
 	InteractiveSplit bool   `yaml:"interactiveSplit,omitempty"`
 	EnableEmoji      bool   `yaml:"enableEmoji,omitempty"`
-	ModelName        string `yaml:"modelName,omitempty"` // "openai", "gemini" or "anthropic"
-	GeminiAPIKey     string `yaml:"geminiApiKey,omitempty"`
-	OpenAIAPIKey     string `yaml:"openAiApiKey,omitempty"`
-	OpenAIModel      string `yaml:"openaiModel,omitempty"`     // e.g. gogpt.GPT4oLatest
-	GeminiModel      string `yaml:"geminiModel,omitempty"`     // e.g. "models/gemini-2.0-flash"
-	AnthropicAPIKey  string `yaml:"anthropicApiKey,omitempty"` // new field for Anthropic
-	AnthropicModel   string `yaml:"anthropicModel,omitempty"`  // new field; default "claude-3-5-sonnet-20241022"
+	ModelName        string `yaml:"modelName,omitempty"`
+
+	// OpenAI-related
+	OpenAIAPIKey string `yaml:"openAiApiKey,omitempty"`
+	OpenAIModel  string `yaml:"openaiModel,omitempty"` // e.g. gogpt.GPT4
+
+	// Gemini-related
+	GeminiAPIKey string `yaml:"geminiApiKey,omitempty"`
+	GeminiModel  string `yaml:"geminiModel,omitempty"`
+
+	// Anthropic-related
+	AnthropicAPIKey string `yaml:"anthropicApiKey,omitempty"`
+	AnthropicModel  string `yaml:"anthropicModel,omitempty"`
 }
 
-// LoadOrCreateConfig reads the config from $HOME/.config/$BINARY_NAME/config.yaml,
-// or creates a default config file if none exists.
+// LoadOrCreateConfig reads the config from ~/.config/<binary>/config.yaml, or creates it if missing.
 func LoadOrCreateConfig() (*Config, error) {
-	// Get the path of the executable.
 	exePath, err := os.Executable()
 	if err != nil {
 		return nil, fmt.Errorf("could not determine executable path: %w", err)
 	}
-	// Extract the binary name.
 	binaryName := filepath.Base(exePath)
 
-	// Get the user's home directory.
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("could not determine user home directory: %w", err)
 	}
 
-	// Construct the config directory and file path.
 	configDir := filepath.Join(homeDir, ".config", binaryName)
 	configPath := filepath.Join(configDir, "config.yaml")
 
-	// Create the config directory if it does not exist.
+	// Ensure config directory exists
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(configDir, 0o755); err != nil {
-			return nil, fmt.Errorf("failed to create config directory %s: %w", configDir, err)
+		if mkErr := os.MkdirAll(configDir, 0o755); mkErr != nil {
+			return nil, fmt.Errorf("failed to create config directory: %w", mkErr)
 		}
 	}
 
-	// If config.yaml doesn't exist, create it with sensible defaults.
+	// If config.yaml doesn't exist, create with defaults
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultCfg := &Config{
 			Prompt:           "",
@@ -85,13 +86,13 @@ func LoadOrCreateConfig() (*Config, error) {
 			SemanticRelease:  false,
 			InteractiveSplit: false,
 			EnableEmoji:      false,
-			ModelName:        "openai", // default provider
-			GeminiAPIKey:     "",
+			ModelName:        "openai",
 			OpenAIAPIKey:     "",
-			OpenAIModel:      gogpt.GPT4oLatest,         // default for OpenAI
-			GeminiModel:      "models/gemini-2.0-flash", // default for Gemini
+			OpenAIModel:      gogpt.GPT4, // example default
+			GeminiAPIKey:     "",
+			GeminiModel:      "models/gemini-2.0-flash",
 			AnthropicAPIKey:  "",
-			AnthropicModel:   "claude-3-5-sonnet-20241022", // default for Anthropic
+			AnthropicModel:   "claude-3-5-sonnet-20241022",
 		}
 		if err := saveConfig(configPath, defaultCfg); err != nil {
 			return nil, fmt.Errorf("failed to create default config.yaml: %w", err)
@@ -100,21 +101,18 @@ func LoadOrCreateConfig() (*Config, error) {
 		return defaultCfg, nil
 	}
 
-	// Otherwise, read config.yaml into our Config struct.
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config.yaml: %w", err)
 	}
 
-	var c Config
-	if err := yaml.Unmarshal(data, &c); err != nil {
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config.yaml: %w", err)
 	}
-
-	return &c, nil
+	return &cfg, nil
 }
 
-// saveConfig writes the Config struct to a YAML file.
 func saveConfig(path string, cfg *Config) error {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -126,114 +124,157 @@ func saveConfig(path string, cfg *Config) error {
 	return nil
 }
 
+// loadAPIKey is a small helper that ensures we only set the final API key from
+// (1) a CLI flag, (2) an ENV variable, or (3) a config file field.
+func loadAPIKey(flagVal, envVarName, configVal, provider string) (string, error) {
+	if strings.TrimSpace(flagVal) != "" {
+		return strings.TrimSpace(flagVal), nil
+	}
+	if envVal := os.Getenv(envVarName); strings.TrimSpace(envVal) != "" {
+		return strings.TrimSpace(envVal), nil
+	}
+	if strings.TrimSpace(configVal) != "" {
+		return strings.TrimSpace(configVal), nil
+	}
+	return "", fmt.Errorf("%s API key is required (flag --%sApiKey, env %s, or config.yaml).", provider, provider, envVarName)
+}
+
+// initAIClient centralizes all logic for picking which AI provider to use,
+// reading the correct key, and instantiating the correct client.
+func initAIClient(
+	ctx context.Context,
+	cfg *Config,
+	modelFlag string,
+	apiKeyFlag string,
+	geminiKeyFlag string,
+	openaiModelFlag string,
+	geminiModelFlag string,
+	anthropicKeyFlag string,
+	anthropicModelFlag string,
+) (ai.AIClient, error) {
+
+	modelName := strings.TrimSpace(modelFlag)
+	if modelName == "" {
+		// fallback from config
+		modelName = cfg.ModelName
+	}
+	if modelName != "openai" && modelName != "gemini" && modelName != "anthropic" {
+		return nil, fmt.Errorf("invalid model specified: %s (must be openai, gemini, or anthropic)", modelName)
+	}
+
+	switch modelName {
+	case "openai":
+		apiKey, err := loadAPIKey(apiKeyFlag, "OPENAI_API_KEY", cfg.OpenAIAPIKey, "openAI")
+		if err != nil {
+			return nil, err
+		}
+		finalModel := openaiModelFlag
+		if strings.TrimSpace(finalModel) == "" {
+			finalModel = cfg.OpenAIModel
+		}
+		openAIClient := gogpt.NewClient(apiKey)
+		return openai.NewOpenAIClient(openAIClient, finalModel), nil
+
+	case "gemini":
+		apiKey, err := loadAPIKey(geminiKeyFlag, "GEMINI_API_KEY", cfg.GeminiAPIKey, "gemini")
+		if err != nil {
+			return nil, err
+		}
+		finalModel := geminiModelFlag
+		if strings.TrimSpace(finalModel) == "" {
+			finalModel = cfg.GeminiModel
+		}
+		geminiClient, err := gemini.NewGeminiProClient(ctx, apiKey, finalModel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize Gemini client: %w", err)
+		}
+		return gemini.NewClient(geminiClient), nil
+
+	case "anthropic":
+		apiKey, err := loadAPIKey(anthropicKeyFlag, "ANTHROPIC_API_KEY", cfg.AnthropicAPIKey, "anthropic")
+		if err != nil {
+			return nil, err
+		}
+		finalModel := anthropicModelFlag
+		if strings.TrimSpace(finalModel) == "" {
+			finalModel = cfg.AnthropicModel
+		}
+		anthroClient, err := anthropic.NewAnthropicClient(apiKey, finalModel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize Anthropic client: %w", err)
+		}
+		return anthroClient, nil
+	}
+	return nil, errors.New("no valid AI provider selected")
+}
+
 func main() {
-	// Initialize logging.
+	// Initialize logging
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
-	// Load or create config.
+	// Load or create config
 	cfgFile, err := LoadOrCreateConfig()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load config.yaml")
 		os.Exit(1)
 	}
 
-	// Create CLI flags (overriding config.yaml values if provided).
-	apiKeyFlag := flag.String("apiKey", "", "OpenAI API key (or set OPENAI_API_KEY environment variable)")
+	// CLI flags
+	apiKeyFlag := flag.String("apiKey", "", "OpenAI API key (use --apiKey for openai, or see --geminiApiKey / --anthropicApiKey)")
+	geminiAPIKeyFlag := flag.String("geminiApiKey", cfgFile.GeminiAPIKey, "Gemini API key (or set GEMINI_API_KEY env)")
+	anthropicAPIKeyFlag := flag.String("anthropicApiKey", cfgFile.AnthropicAPIKey, "Anthropic API key (or set ANTHROPIC_API_KEY env)")
+
 	languageFlag := flag.String("language", "english", "Language for the commit message")
 	commitTypeFlag := flag.String("commit-type", cfgFile.CommitType, "Commit type (e.g. feat, fix, docs)")
-	templateFlag := flag.String("template", cfgFile.Template, "Commit message template (e.g. 'Modified {GIT_BRANCH} | {COMMIT_MESSAGE}')")
+	templateFlag := flag.String("template", cfgFile.Template, "Commit message template")
 	forceFlag := flag.Bool("force", false, "Automatically commit without TUI")
-	semanticReleaseFlag := flag.Bool("semantic-release", cfgFile.SemanticRelease, "Suggest/tag a new version")
+	semanticReleaseFlag := flag.Bool("semantic-release", cfgFile.SemanticRelease, "Suggest or tag a new version (semantic release)")
 	interactiveSplitFlag := flag.Bool("interactive-split", cfgFile.InteractiveSplit, "Interactively split staged changes into multiple commits")
 	emojiFlag := flag.Bool("emoji", cfgFile.EnableEmoji, "Include an emoji prefix in commit message")
-	manualSemverFlag := flag.Bool("manual-semver", false, "Pick the next version manually (major/minor/patch) instead of AI suggestion")
-	modelFlag := flag.String("model", cfgFile.ModelName, "AI model to use (openai, gemini or anthropic)")
-	geminiAPIKeyFlag := flag.String("geminiApiKey", cfgFile.GeminiAPIKey, "Gemini API key (or set GEMINI_API_KEY environment variable)")
-	// New flags for specifying the AI models.
+	manualSemverFlag := flag.Bool("manual-semver", false, "Pick the next version manually instead of using AI suggestion")
+
+	modelFlag := flag.String("model", cfgFile.ModelName, "AI model to use (openai, gemini, or anthropic)")
 	openaiModelFlag := flag.String("openai-model", cfgFile.OpenAIModel, "OpenAI model to use")
 	geminiModelFlag := flag.String("gemini-model", cfgFile.GeminiModel, "Gemini model to use")
-	// New flags for Anthropic.
-	anthropicAPIKeyFlag := flag.String("anthropicApiKey", cfgFile.AnthropicAPIKey, "Anthropic API key (or set ANTHROPIC_API_KEY environment variable)")
 	anthropicModelFlag := flag.String("anthropic-model", cfgFile.AnthropicModel, "Anthropic model to use")
 
 	flag.Parse()
 
-	// Apply final configuration: flags > environment variables > config.yaml.
+	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var aiClient ai.AIClient
-	var apiKey string
-	var modelName string
-
-	modelName = *modelFlag
-	if modelName != "openai" && modelName != "gemini" && modelName != "anthropic" {
-		log.Error().Msg("Invalid model specified. Choose 'openai', 'gemini' or 'anthropic'.")
+	// Initialize the AI client once, with a single function
+	aiClient, err := initAIClient(
+		ctx,
+		cfgFile,
+		*modelFlag,
+		*apiKeyFlag,
+		*geminiAPIKeyFlag,
+		*openaiModelFlag,
+		*geminiModelFlag,
+		*anthropicAPIKeyFlag,
+		*anthropicModelFlag,
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("Unable to initialize AI client")
 		os.Exit(1)
 	}
 
-	if modelName == "openai" {
-		apiKey = *apiKeyFlag
-		if apiKey == "" {
-			apiKey = os.Getenv("OPENAI_API_KEY")
-		}
-		if apiKey == "" {
-			apiKey = cfgFile.OpenAIAPIKey
-		}
-		if apiKey == "" {
-			log.Error().Msg("OpenAI API key is required (flag --apiKey, env OPENAI_API_KEY, or config.yaml).")
-			os.Exit(1)
-		}
-		openAIClient := gogpt.NewClient(apiKey)
-		// Pass the configurable OpenAI model.
-		aiClient = openai.NewOpenAIClient(openAIClient, *openaiModelFlag)
-	} else if modelName == "gemini" {
-		apiKey = *geminiAPIKeyFlag
-		if apiKey == "" {
-			apiKey = os.Getenv("GEMINI_API_KEY")
-		}
-		if apiKey == "" {
-			log.Error().Msg("Gemini API key is required (flag --geminiApiKey, env GEMINI_API_KEY, or config.yaml).")
-			os.Exit(1)
-		}
-		// Pass the configurable Gemini model.
-		geminiClient, err := gemini.NewGeminiProClient(ctx, apiKey, *geminiModelFlag)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to initialize Gemini client")
-			os.Exit(1)
-		}
-		aiClient = gemini.NewClient(geminiClient)
-	} else if modelName == "anthropic" {
-		apiKey = *anthropicAPIKeyFlag
-		if apiKey == "" {
-			apiKey = os.Getenv("ANTHROPIC_API_KEY")
-		}
-		if apiKey == "" {
-			log.Error().Msg("Anthropic API key is required (flag --anthropicApiKey, env ANTHROPIC_API_KEY, or config.yaml).")
-			os.Exit(1)
-		}
-		anthroClient, err := anthropic.NewAnthropicClient(apiKey, *anthropicModelFlag)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to initialize Anthropic client")
-			os.Exit(1)
-		}
-		aiClient = anthroClient
-	} else {
-		log.Error().Msg("No AI model selected.")
-		os.Exit(1)
-	}
-
+	// Verify we're in a Git repository
 	if !git.CheckGitRepository(ctx) {
 		log.Error().Msg("This is not a Git repository.")
 		os.Exit(1)
 	}
 
+	// Check commit type validity
 	if *commitTypeFlag != "" && !committypes.IsValidCommitType(*commitTypeFlag) {
 		log.Error().Msgf("Invalid commit type: %s", *commitTypeFlag)
 		os.Exit(1)
 	}
 
+	// Interactive split flow (partial commits)
 	if *interactiveSplitFlag {
 		if err := runInteractiveSplit(ctx, aiClient); err != nil {
 			log.Error().Err(err).Msg("Error in interactive split")
@@ -249,12 +290,12 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Retrieve diff
 	diff, err := git.GetGitDiff(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Error getting Git diff")
 		os.Exit(1)
 	}
-
 	originalDiff := diff
 	diff = git.FilterLockFiles(diff, []string{"go.mod", "go.sum"})
 	if len(strings.TrimSpace(diff)) == 0 {
@@ -262,34 +303,23 @@ func main() {
 		os.Exit(0)
 	}
 	if diff != originalDiff {
-		fmt.Println("Note: lock file changes are committed but not analyzed for AI commit message generation.")
+		fmt.Println("Note: lock file changes are still committed but not used for AI generation.")
 	}
 
+	// Possibly truncate the diff for large changes
 	diff, _ = openai.MaybeSummarizeDiff(diff, 5000)
+
+	// Build final prompt
 	promptText := prompt.BuildPrompt(diff, *languageFlag, *commitTypeFlag, "")
 
-	// Final merged config (flags > config):
-	cfg := Config{
-		Prompt:          promptText,
-		CommitType:      *commitTypeFlag,
-		Template:        *templateFlag,
-		SemanticRelease: *semanticReleaseFlag,
-		EnableEmoji:     *emojiFlag,
-		ModelName:       modelName,
-		GeminiAPIKey:    *geminiAPIKeyFlag,
-		OpenAIAPIKey:    apiKey,
-		OpenAIModel:     *openaiModelFlag,
-		GeminiModel:     *geminiModelFlag,
-		AnthropicAPIKey: *anthropicAPIKeyFlag,
-		AnthropicModel:  *anthropicModelFlag,
-	}
-
-	commitMsg, err := generateCommitMessage(ctx, aiClient, cfg.Prompt, cfg.CommitType, cfg.Template, cfg.EnableEmoji)
+	// Generate commit message
+	commitMsg, err := generateCommitMessage(ctx, aiClient, promptText, *commitTypeFlag, *templateFlag, *emojiFlag)
 	if err != nil {
 		log.Error().Err(err).Msg("Error generating commit message")
 		os.Exit(1)
 	}
 
+	// Force commit if requested
 	if *forceFlag {
 		if strings.TrimSpace(commitMsg) == "" {
 			log.Error().Msg("Generated commit message is empty; cannot commit.")
@@ -300,7 +330,7 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("Commit created successfully (forced)!")
-		if cfg.SemanticRelease {
+		if *semanticReleaseFlag {
 			if err := doSemanticRelease(ctx, aiClient, commitMsg, *manualSemverFlag); err != nil {
 				log.Error().Err(err).Msg("Error in semantic release")
 				os.Exit(1)
@@ -309,14 +339,15 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Otherwise, run interactive TUI
 	model := ui.NewUIModel(
 		commitMsg,
 		diff,
 		*languageFlag,
 		promptText,
 		*commitTypeFlag,
-		cfg.Template,
-		cfg.EnableEmoji,
+		*templateFlag,
+		*emojiFlag,
 		aiClient,
 	)
 	p := ui.NewProgram(model)
@@ -328,7 +359,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if cfg.SemanticRelease {
+	// If semantic release
+	if *semanticReleaseFlag {
 		if err := doSemanticRelease(ctx, aiClient, commitMsg, *manualSemverFlag); err != nil {
 			log.Error().Err(err).Msg("Error in semantic release")
 			os.Exit(1)
@@ -336,24 +368,37 @@ func main() {
 	}
 }
 
-func generateCommitMessage(ctx context.Context, client ai.AIClient, prompt string, commitType string, templateStr string, enableEmoji bool) (string, error) {
+func generateCommitMessage(
+	ctx context.Context,
+	client ai.AIClient,
+	prompt string,
+	commitType string,
+	templateStr string,
+	enableEmoji bool,
+) (string, error) {
 	res, err := client.GetCommitMessage(ctx, prompt)
 	if err != nil {
 		return "", err
 	}
+	// Clean up
 	res = openai.SanitizeOpenAIResponse(res, commitType)
+
+	// Optionally add Gitmoji
 	if enableEmoji {
 		res = git.AddGitmoji(res, commitType)
 	}
+
+	// Apply template
 	if templateStr != "" {
 		res, err = template.ApplyTemplate(templateStr, res)
 		if err != nil {
 			return "", err
 		}
 	}
-	return res, nil
+	return strings.TrimSpace(res), nil
 }
 
+// doSemanticRelease performs the semantic version flow
 func doSemanticRelease(ctx context.Context, client ai.AIClient, commitMsg string, manual bool) error {
 	log.Info().Msg("Starting semantic release process...")
 	currentVersion, err := versioner.GetCurrentVersionTag(ctx)
@@ -392,6 +437,7 @@ func doSemanticRelease(ctx context.Context, client ai.AIClient, commitMsg string
 	return nil
 }
 
+// runInteractiveSplit handles chunk-based partial commits in a TUI
 func runInteractiveSplit(ctx context.Context, client ai.AIClient) error {
 	diff, err := git.GetGitDiff(ctx)
 	if err != nil {
@@ -412,8 +458,5 @@ func runInteractiveSplit(ctx context.Context, client ai.AIClient) error {
 	}
 	model := splitter.NewSplitterModel(chunks, client)
 	prog := splitter.NewProgram(model)
-	if err := prog.Start(); err != nil {
-		return fmt.Errorf("splitter UI error: %w", err)
-	}
-	return nil
+	return prog.Start()
 }
