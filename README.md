@@ -2,12 +2,14 @@
 
 **AI-Commit** is a tool that generates [Conventional Commits](https://www.conventionalcommits.org/) using AI. 
 
-It supports   
+It supports:
 - **OpenAI**
 - **Google Gemini**
-- **Anthropic Claude**. 
-   
+- **Anthropic Claude**.
+
 It can also optionally perform an AI-assisted semantic release or split staged changes into multiple partial commits.
+
+---
 
 ## Features
 
@@ -16,8 +18,10 @@ It can also optionally perform an AI-assisted semantic release or split staged c
 - **Interactive** or **Non-Interactive** (`--force`)
 - **Semantic Release** with optional manual or AI-driven version bumps
 - **Interactive Commit Splitting** (partial commits)
-- **Emoji Support** with `--emoji`
+- **Emoji Support** (`--emoji`)
 - **Custom Templates** (e.g. `Branch: {GIT_BRANCH}\n{COMMIT_MESSAGE}`)
+
+---
 
 ## Installation
 
@@ -29,29 +33,42 @@ go build -o ai-commit ./cmd/ai-commit
 sudo mv ai-commit /usr/local/bin/
 ```
 
+---
+
 ## Configuration
 
 A `config.yaml` is auto-created at `~/.config/ai-commit/config.yaml` with defaults:
 
 ```yaml
-modelName: "openai"
+provider: "openai"
 openAiApiKey: "sk-YOUR-OPENAI-KEY"
 openaiModel: "gpt-4"
+
 geminiApiKey: "YOUR-GEMINI-KEY"
 geminiModel: "models/gemini-2.0-flash"
+
 anthropicApiKey: "sk-YOUR-ANTHROPIC-KEY"
-anthropicModel: "claude-3-5-sonnet-latest"
-template: ""
+anthropicModel: "claude-2"
+
+semanticRelease: false
+interactiveSplit: false
 enableEmoji: false
+commitType: ""
+template: ""
 prompt: ""
-authorName: "Your Name"
-authorEmail: "youremail@example.com"
+
+authorName:  "ai-commit"
+authorEmail: "ai-commit@example.com"
 ```
 
-*Any CLI flags override these config values.* You can also specify keys via environment variables:
+> **Note**: Any CLI flags override these config values.
+
+You can also specify keys via environment variables:
 - `OPENAI_API_KEY`
 - `GEMINI_API_KEY`
 - `ANTHROPIC_API_KEY`
+
+---
 
 ## Basic Usage
 
@@ -71,18 +88,43 @@ authorEmail: "youremail@example.com"
    - Add custom prompt text (`p`)
    - Quit without committing (`q` / `Ctrl+C`)
 
+---
+
 ## Command-Line Flags
 
-Common flags:
-- `--model openai|gemini|anthropic`  
-- `--apiKey YOUR_OPENAI_KEY` (or use `--geminiApiKey` / `--anthropicApiKey`)
-- `--commit-type fix|feat|docs|...`
-- `--template "Branch: {GIT_BRANCH}\n{COMMIT_MESSAGE}"`
-- `--force` (bypass interactive UI)
-- `--semantic-release` (auto version bump)
-- `--manual-semver` (choose major/minor/patch in a TUI)
-- `--interactive-split` (chunk-based partial commits)
-- `--emoji` (emoji prefix on commit)
+**Key flags**:
+- `--provider`  
+  *Which AI provider to use?*  
+  Valid: `openai`, `gemini`, `anthropic`  
+  (Default from config.yaml)
+
+- `--model`  
+  *Which sub-model to use within that provider?*  
+  e.g., `gpt-4`, `models/gemini-2.0-flash`, `claude-2`
+
+- `--apiKey`  
+  *OpenAI key.*  
+  (For Gemini or Anthropic, use `--geminiApiKey` or `--anthropicApiKey`.)
+
+- `--commit-type fix|feat|docs|refactor|test|perf|build|ci|chore`
+  *Specify commit type if desired.*
+
+- `--template "Branch: {GIT_BRANCH}\n{COMMIT_MESSAGE}"`  
+  *Commit template to wrap the AI's result.*
+
+- `--force`
+  *Commit without TUI confirmation.*
+
+- `--semantic-release`
+  *Perform optional AI-based version bump or manual version bump (`--manual-semver`).*
+
+- `--interactive-split`
+  *Launch a chunk-based partial commit TUI.*
+
+- `--emoji`
+  *Include emoji in the commit (e.g. `✨ feat: ...`).*
+
+---
 
 ## Examples
 
@@ -98,16 +140,17 @@ Common flags:
    ```bash
    ai-commit --semantic-release
    ```
-4. **Model**:
+4. **Provider + Model**:
    ```bash
-   ai-commit --model anthropic --anthropicApiKey YOUR_CLAUDE_KE
-
-   ai-commit --model gemini --geminiApiKey YOUR_GEMINI_KEY
-
-   ai-commit --model openai --openaiApiKey YOUR_OPENAI_KEY
+   ai-commit --provider=openai --model=gpt-4 --apiKey=sk-OPENAI_KEY
+   ai-commit --provider=gemini --model=models/gemini-2.0-flash --geminiApiKey=YOUR_GEMINI_KEY
+   ai-commit --provider=anthropic --model=claude-2 --anthropicApiKey=YOUR_ANTHROPIC_KEY
    ```
 5. **Interactive Split**:
    ```bash
    ai-commit --interactive-split
    ```
----
+6. **Manual SemVer**:
+   ```bash
+   ai-commit --semantic-release --manual-semver
+   ```
