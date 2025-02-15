@@ -52,6 +52,10 @@ type Config struct {
 	// Anthropic-related
 	AnthropicAPIKey string `yaml:"anthropicApiKey,omitempty"`
 	AnthropicModel  string `yaml:"anthropicModel,omitempty"`
+
+	// New commit author configuration
+	AuthorName  string `yaml:"authorName,omitempty"`
+	AuthorEmail string `yaml:"authorEmail,omitempty"`
 }
 
 // LoadOrCreateConfig reads the config from ~/.config/<binary>/config.yaml, or creates it if missing.
@@ -93,6 +97,8 @@ func LoadOrCreateConfig() (*Config, error) {
 			GeminiModel:      "models/gemini-2.0-flash",
 			AnthropicAPIKey:  "",
 			AnthropicModel:   "claude-3-5-sonnet-20241022",
+			AuthorName:       "ai-commit",         // default commit author name
+			AuthorEmail:      "rennato@gmail.com", // default commit author email
 		}
 		if err := saveConfig(configPath, defaultCfg); err != nil {
 			return nil, fmt.Errorf("failed to create default config.yaml: %w", err)
@@ -220,6 +226,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Set commit author details from config to git package global variables
+	git.CommitAuthorName = cfgFile.AuthorName
+	git.CommitAuthorEmail = cfgFile.AuthorEmail
+
 	// CLI flags
 	apiKeyFlag := flag.String("apiKey", "", "OpenAI API key (use --apiKey for openai, or see --geminiApiKey / --anthropicApiKey)")
 	geminiAPIKeyFlag := flag.String("geminiApiKey", cfgFile.GeminiAPIKey, "Gemini API key (or set GEMINI_API_KEY env)")
@@ -234,7 +244,7 @@ func main() {
 	emojiFlag := flag.Bool("emoji", cfgFile.EnableEmoji, "Include an emoji prefix in commit message")
 	manualSemverFlag := flag.Bool("manual-semver", false, "Pick the next version manually instead of using AI suggestion")
 
-	modelFlag := flag.String("model", cfgFile.ModelName, "AI model to use (openai, gemini, or anthropic)")
+	modelFlag := flag.String("model", cfgFile.ModelName, "AI model to use (openai, gemini, or anthropropic)")
 	openaiModelFlag := flag.String("openai-model", cfgFile.OpenAIModel, "OpenAI model to use")
 	geminiModelFlag := flag.String("gemini-model", cfgFile.GeminiModel, "Gemini model to use")
 	anthropicModelFlag := flag.String("anthropic-model", cfgFile.AnthropicModel, "Anthropic model to use")

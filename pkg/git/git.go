@@ -15,12 +15,16 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
-type DiffChunk struct {
-	FilePath   string
-	HunkHeader string
-	Lines      []string
-}
+// Global variables to hold commit author details.
+// These are set from the config in main().
+var (
+	// CommitAuthorName holds the commit author's name for git commits.
+	CommitAuthorName = "ai-commit"
+	// CommitAuthorEmail holds the commit author's email for git commits.
+	CommitAuthorEmail = "ai-commit@example.com"
+)
 
+// isBinary determines whether the provided data is binary.
 func isBinary(data []byte) bool {
 	if len(data) == 0 {
 		return false
@@ -28,6 +32,7 @@ func isBinary(data []byte) bool {
 	return bytes.IndexByte(data, 0) != -1
 }
 
+// ParseDiffToChunks splits a git diff string into chunks.
 func ParseDiffToChunks(diff string) ([]DiffChunk, error) {
 	lines := strings.Split(diff, "\n")
 	var chunks []DiffChunk
@@ -69,6 +74,14 @@ func ParseDiffToChunks(diff string) ([]DiffChunk, error) {
 	return chunks, nil
 }
 
+// DiffChunk represents a section of a git diff.
+type DiffChunk struct {
+	FilePath   string
+	HunkHeader string
+	Lines      []string
+}
+
+// parseFilePath extracts the file path from a diff header line.
 func parseFilePath(diffLine string) string {
 	parts := strings.Split(diffLine, " ")
 	if len(parts) < 4 {
@@ -82,11 +95,13 @@ func parseFilePath(diffLine string) string {
 	return bPath
 }
 
+// CheckGitRepository verifies that the current directory is a Git repository.
 func CheckGitRepository(ctx context.Context) bool {
 	_, err := git.PlainOpen(".")
 	return err == nil
 }
 
+// GetGitDiff returns the diff of staged changes.
 func GetGitDiff(ctx context.Context) (string, error) {
 	repo, err := git.PlainOpen(".")
 	if err != nil {
@@ -157,6 +172,7 @@ func GetGitDiff(ctx context.Context) (string, error) {
 	return diffResult.String(), nil
 }
 
+// getDiffAgainstEmpty returns a diff against an empty file for untracked files.
 func getDiffAgainstEmpty(repo *git.Repository) (string, error) {
 	wt, err := repo.Worktree()
 	if err != nil {
@@ -192,6 +208,7 @@ func getDiffAgainstEmpty(repo *git.Repository) (string, error) {
 	return diffResult.String(), nil
 }
 
+// AddGitmoji adds an emoji prefix to the commit message based on the commit type.
 func AddGitmoji(message, commitType string) string {
 	if commitType == "" {
 		lowerMsg := strings.ToLower(message)
@@ -243,6 +260,7 @@ func AddGitmoji(message, commitType string) string {
 	return fmt.Sprintf("%s: %s", prefix, message)
 }
 
+// GetHeadCommitMessage returns the commit message of HEAD.
 func GetHeadCommitMessage(ctx context.Context) (string, error) {
 	repo, err := git.PlainOpen(".")
 	if err != nil {
@@ -259,6 +277,7 @@ func GetHeadCommitMessage(ctx context.Context) (string, error) {
 	return strings.TrimSpace(commit.Message), nil
 }
 
+// GetCurrentBranch returns the name of the current branch.
 func GetCurrentBranch(ctx context.Context) (string, error) {
 	repo, err := git.PlainOpen(".")
 	if err != nil {
@@ -271,6 +290,7 @@ func GetCurrentBranch(ctx context.Context) (string, error) {
 	return headRef.Name().Short(), nil
 }
 
+// FilterLockFiles removes lines for lock files from the diff.
 func FilterLockFiles(diff string, lockFiles []string) string {
 	lines := strings.Split(diff, "\n")
 	var filtered []string
@@ -299,6 +319,7 @@ func FilterLockFiles(diff string, lockFiles []string) string {
 	return strings.Join(filtered, "\n")
 }
 
+// CommitChanges creates a commit with the provided message using the configured commit author.
 func CommitChanges(ctx context.Context, commitMessage string) error {
 	repo, err := git.PlainOpen(".")
 	if err != nil {
@@ -308,10 +329,11 @@ func CommitChanges(ctx context.Context, commitMessage string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get worktree: %w", err)
 	}
+	// Use the global commit author variables set from config
 	_, err = wt.Commit(commitMessage, &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  "ai-commit",
-			Email: "rennato@gmail.com",
+			Name:  CommitAuthorName,
+			Email: CommitAuthorEmail,
 			When:  time.Now(),
 		},
 	})
