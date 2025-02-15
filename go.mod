@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.0.0
 	github.com/go-git/go-git/v5 v5.13.2
 	github.com/google/generative-ai-go v0.19.0
+	github.com/liushuangls/go-anthropic/v2 v2.13.1
 	github.com/rs/zerolog v1.33.0
 	github.com/sashabaranov/go-openai v1.36.1
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3

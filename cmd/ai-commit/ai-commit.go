@@ -17,6 +17,7 @@ import (
 	gogpt "github.com/sashabaranov/go-openai"
 
 	"github.com/renatogalera/ai-commit/pkg/ai"
+	"github.com/renatogalera/ai-commit/pkg/anthropic" // new Anthropic provider package
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/gemini"
 	"github.com/renatogalera/ai-commit/pkg/git"
@@ -38,11 +39,13 @@ type Config struct {
 	SemanticRelease  bool   `yaml:"semanticRelease,omitempty"`
 	InteractiveSplit bool   `yaml:"interactiveSplit,omitempty"`
 	EnableEmoji      bool   `yaml:"enableEmoji,omitempty"`
-	ModelName        string `yaml:"modelName,omitempty"` // "openai" or "gemini"
+	ModelName        string `yaml:"modelName,omitempty"` // "openai", "gemini" or "anthropic"
 	GeminiAPIKey     string `yaml:"geminiApiKey,omitempty"`
 	OpenAIAPIKey     string `yaml:"openAiApiKey,omitempty"`
-	OpenAIModel      string `yaml:"openaiModel,omitempty"` // e.g. gogpt.GPT4oLatest
-	GeminiModel      string `yaml:"geminiModel,omitempty"` // e.g. "models/gemini-2.0-flash"
+	OpenAIModel      string `yaml:"openaiModel,omitempty"`     // e.g. gogpt.GPT4oLatest
+	GeminiModel      string `yaml:"geminiModel,omitempty"`     // e.g. "models/gemini-2.0-flash"
+	AnthropicAPIKey  string `yaml:"anthropicApiKey,omitempty"` // new field for Anthropic
+	AnthropicModel   string `yaml:"anthropicModel,omitempty"`  // new field; default "claude-3-5-sonnet-20241022"
 }
 
 // LoadOrCreateConfig reads the config from $HOME/.config/$BINARY_NAME/config.yaml,
@@ -82,11 +85,13 @@ func LoadOrCreateConfig() (*Config, error) {
 			SemanticRelease:  false,
 			InteractiveSplit: false,
 			EnableEmoji:      false,
-			ModelName:        "openai", // or "gemini"
+			ModelName:        "openai", // default provider
 			GeminiAPIKey:     "",
 			OpenAIAPIKey:     "",
 			OpenAIModel:      gogpt.GPT4oLatest,         // default for OpenAI
 			GeminiModel:      "models/gemini-2.0-flash", // default for Gemini
+			AnthropicAPIKey:  "",
+			AnthropicModel:   "claude-3-5-sonnet-20241022", // default for Anthropic
 		}
 		if err := saveConfig(configPath, defaultCfg); err != nil {
 			return nil, fmt.Errorf("failed to create default config.yaml: %w", err)
@@ -143,11 +148,14 @@ func main() {
 	interactiveSplitFlag := flag.Bool("interactive-split", cfgFile.InteractiveSplit, "Interactively split staged changes into multiple commits")
 	emojiFlag := flag.Bool("emoji", cfgFile.EnableEmoji, "Include an emoji prefix in commit message")
 	manualSemverFlag := flag.Bool("manual-semver", false, "Pick the next version manually (major/minor/patch) instead of AI suggestion")
-	modelFlag := flag.String("model", cfgFile.ModelName, "AI model to use (openai or gemini)")
+	modelFlag := flag.String("model", cfgFile.ModelName, "AI model to use (openai, gemini or anthropic)")
 	geminiAPIKeyFlag := flag.String("geminiApiKey", cfgFile.GeminiAPIKey, "Gemini API key (or set GEMINI_API_KEY environment variable)")
 	// New flags for specifying the AI models.
 	openaiModelFlag := flag.String("openai-model", cfgFile.OpenAIModel, "OpenAI model to use")
 	geminiModelFlag := flag.String("gemini-model", cfgFile.GeminiModel, "Gemini model to use")
+	// New flags for Anthropic.
+	anthropicAPIKeyFlag := flag.String("anthropicApiKey", cfgFile.AnthropicAPIKey, "Anthropic API key (or set ANTHROPIC_API_KEY environment variable)")
+	anthropicModelFlag := flag.String("anthropic-model", cfgFile.AnthropicModel, "Anthropic model to use")
 
 	flag.Parse()
 
@@ -156,12 +164,12 @@ func main() {
 	defer cancel()
 
 	var aiClient ai.AIClient
-	var modelName string
 	var apiKey string
+	var modelName string
 
 	modelName = *modelFlag
-	if modelName != "openai" && modelName != "gemini" {
-		log.Error().Msg("Invalid model specified. Choose 'openai' or 'gemini'.")
+	if modelName != "openai" && modelName != "gemini" && modelName != "anthropic" {
+		log.Error().Msg("Invalid model specified. Choose 'openai', 'gemini' or 'anthropic'.")
 		os.Exit(1)
 	}
 
@@ -196,6 +204,21 @@ func main() {
 			os.Exit(1)
 		}
 		aiClient = gemini.NewClient(geminiClient)
+	} else if modelName == "anthropic" {
+		apiKey = *anthropicAPIKeyFlag
+		if apiKey == "" {
+			apiKey = os.Getenv("ANTHROPIC_API_KEY")
+		}
+		if apiKey == "" {
+			log.Error().Msg("Anthropic API key is required (flag --anthropicApiKey, env ANTHROPIC_API_KEY, or config.yaml).")
+			os.Exit(1)
+		}
+		anthroClient, err := anthropic.NewAnthropicClient(apiKey, *anthropicModelFlag)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to initialize Anthropic client")
+			os.Exit(1)
+		}
+		aiClient = anthroClient
 	} else {
 		log.Error().Msg("No AI model selected.")
 		os.Exit(1)
@@ -257,6 +280,8 @@ func main() {
 		OpenAIAPIKey:    apiKey,
 		OpenAIModel:     *openaiModelFlag,
 		GeminiModel:     *geminiModelFlag,
+		AnthropicAPIKey: *anthropicAPIKeyFlag,
+		AnthropicModel:  *anthropicModelFlag,
 	}
 
 	commitMsg, err := generateCommitMessage(ctx, aiClient, cfg.Prompt, cfg.CommitType, cfg.Template, cfg.EnableEmoji)

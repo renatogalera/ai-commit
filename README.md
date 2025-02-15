@@ -1,6 +1,6 @@
 # AI-Commit
 
-**AI-Commit** is an AI-powered tool that automatically generates [Conventional Commits](https://www.conventionalcommits.org/) based on your staged changes. It leverages [OpenAI](https://openai.com/) to produce concise, readable commit messages and now includes an experimental semantic release feature for automated versioning, interactive commit splitting for partial commits, and a new **Gemini** integration for those who wish to use Google's Gemini API as an alternative AI provider. Inspired by [insulineru/ai-commit](https://github.com/insulineru/ai-commit).
+**AI-Commit** is an AI-powered tool that automatically generates [Conventional Commits](https://www.conventionalcommits.org/) based on your staged changes. It leverages [OpenAI](https://openai.com/), [Google Gemini](https://developers.google.com/gemini) and now also [Anthropic Claude](https://www.anthropic.com/) to produce concise, readable commit messages. The tool also features an experimental semantic release process for automated versioning and interactive commit splitting for partial commits. It is inspired by [insulineru/ai-commit](https://github.com/insulineru/ai-commit).
 
 ---
 
@@ -15,6 +15,7 @@
     - [Configuration File (config.yaml)](#configuration-file-configyaml)
     - [OpenAI API Key](#openai-api-key)
     - [Gemini API Key](#gemini-api-key)
+    - [Anthropic API Key](#anthropic-api-key)
     - [AI Model Selection](#ai-model-selection)
     - [Custom Templates](#custom-templates)
     - [Semantic Release](#semantic-release)
@@ -30,6 +31,7 @@
     - [6. Optional Emoji Prefix](#6-optional-emoji-prefix)
     - [7. Semantic Release with Manual Version Bump](#7-semantic-release-with-manual-version-bump)
     - [8. Using Gemini as AI Provider](#8-using-gemini-as-ai-provider)
+    - [9. Using Anthropic as AI Provider](#9-using-anthropic-as-ai-provider)
   - [License](#license)
 
 ---
@@ -37,7 +39,7 @@
 ## Key Features
 
 1. **AI-Powered Commit Messages**  
-   Generates helpful commit messages by analyzing your staged diff and prompting OpenAI (or Gemini) for a commit message.
+   Generates helpful commit messages by analyzing your staged diff and prompting the configured AI provider for a commit message.
 
 2. **Conventional Commits Compliance**  
    Ensures messages follow [Conventional Commits](https://www.conventionalcommits.org/) for a cleaner, interpretable commit history.
@@ -61,7 +63,10 @@
    Add an emoji prefix to your commit message if desired.
 
 9. **Gemini Integration (Experimental)**  
-   In addition to OpenAI, you can now choose to use Google's Gemini API as your AI provider. Gemini works seamlessly with the same unified interface and TUI flow.
+   In addition to OpenAI, you can choose to use Google's Gemini API as your AI provider with a unified interface and UI flow.
+
+10. **Anthropic Integration (Experimental)**  
+    Now you can also choose Anthropic's Claude models by setting the provider to `"anthropic"`. This allows you to generate commit messages using Anthropic's safety-first language model, Claude.
 
 ---
 
@@ -71,6 +76,7 @@
 - **Go**: Needed to build AI-Commit from source.
 - **OpenAI API Key**: Sign up at [https://openai.com/](https://openai.com/) to get your API key.
 - **Gemini API Key (optional)**: If you wish to use Gemini, sign up at [Google Gemini](https://developers.google.com/gemini) and obtain an API key.
+- **Anthropic API Key (optional)**: If you wish to use Anthropic's Claude, sign up at [Anthropic](https://www.anthropic.com/) and obtain an API key.
 
 ---
 
@@ -103,69 +109,41 @@
 
 ### Configuration File (config.yaml)
 
-The `config.yaml` file holds default settings used by AI-Commit when generating commit messages. It is typically located at `~/.config/ai-commit/config.yaml` (the directory name is based on the binary name). The file includes the following options:
+The `config.yaml` file holds default settings used by AI-Commit when generating commit messages. It is typically located at `~/.config/ai-commit/config.yaml` (the directory name is based on the binary name). An updated example configuration file with Anthropic support is shown below:
 
-- **`modelName`**  
-  **Description:** Specifies which AI model provider to use.  
-  **Valid Options:** `"openai"` or `"gemini"`  
-  **Example:**  
-  ```yaml
-  modelName: "openai"
-  ```  
-  This option determines whether AI-Commit uses OpenAI's API or Google's Gemini API to generate commit messages.
+```yaml
+# config.yaml
 
-- **`openaiModel`**  
-  **Description:** Defines the specific OpenAI model to be used when `modelName` is set to `"openai"`.  
-  **Example:**  
-  ```yaml
-  openaiModel: "gpt-4olatest"
-  ```  
-  Make sure that the specified model is supported by your OpenAI account.
+# Which AI model provider to use. Valid options: "openai", "gemini", or "anthropic"
+modelName: "openai"
 
-- **`geminiModel`**  
-  **Description:** Defines the specific Gemini model to be used when `modelName` is set to `"gemini"`.  
-  **Example:**  
-  ```yaml
-  geminiModel: "models/gemini-2.0-flash"
-  ```  
-  Verify that your Gemini account supports the specified model.
+# OpenAI model to use.
+openaiModel: "gpt-4olatest"
 
-- **`openAiApiKey`**  
-  **Description:** Your API key for OpenAI.  
-  **Note:** This value is overridden by the `--apiKey` flag or the `OPENAI_API_KEY` environment variable if provided at runtime.  
-  **Example:**  
-  ```yaml
-  openAiApiKey: "sk-your-openai-key"
-  ```
+# Gemini model to use.
+geminiModel: "models/gemini-2.0-flash"
 
-- **`geminiApiKey`**  
-  **Description:** Your API key for Gemini.  
-  **Note:** This value is overridden by the `--geminiApiKey` flag or the `GEMINI_API_KEY` environment variable if provided at runtime.  
-  **Example:**  
-  ```yaml
-  geminiApiKey: ""
-  ```
+# Anthropic model to use.
+anthropicModel: "claude-3-5-sonnet-20241022"
 
-- **`commitType`**  
-  **Description:** Sets the default commit type if none is provided via the command line. Common commit types include `"feat"`, `"fix"`, `"docs"`, etc.  
-  **Example:**  
-  ```yaml
-  commitType: "feat"
-  ```
+# API key for OpenAI. Overridden by the --apiKey flag or the OPENAI_API_KEY environment variable.
+openAiApiKey: "sk-your-openai-key"
 
-- **`template`**  
-  **Description:** Provides a default commit message template. You can include placeholders such as `{GIT_BRANCH}` and `{COMMIT_MESSAGE}` which will be dynamically replaced at commit time.  
-  **Example:**  
-  ```yaml
-  template: ""
-  ```
+# API key for Gemini. Overridden by the --geminiApiKey flag or the GEMINI_API_KEY environment variable.
+geminiApiKey: ""
 
-- **`prompt`**  
-  **Description:** A default prompt seed that influences the AI-generated commit message. Typically, this prompt is built automatically from your staged diff, but you can add extra context here if desired.  
-  **Example:**  
-  ```yaml
-  prompt: ""
-  ```
+# API key for Anthropic. Overridden by the --anthropicApiKey flag or the ANTHROPIC_API_KEY environment variable.
+anthropicApiKey: ""
+
+# Default commit type (e.g. feat, fix, docs, etc.). Overridden by --commit-type flag.
+commitType: "feat"
+
+# A default commit message template, e.g. "Modified {GIT_BRANCH} | {COMMIT_MESSAGE}".
+template: ""
+
+# A default prompt seed. Typically built automatically from the staged diff, but you can add extra text here.
+prompt: ""
+```
 
 ### OpenAI API Key
 
@@ -173,34 +151,43 @@ Set your API key either via a command-line flag or an environment variable:
 
 - **Command-Line Flag:** `--apiKey YOUR_API_KEY`
 - **Environment Variable:**  
-
   ```bash
   export OPENAI_API_KEY=YOUR_API_KEY
   ```
 
 ### Gemini API Key
 
-If you prefer to use the Gemini model, supply your Gemini API key via:
+Supply your Gemini API key via:
 
 - **Command-Line Flag:** `--geminiApiKey YOUR_GEMINI_API_KEY`
 - **Environment Variable:**  
-
   ```bash
   export GEMINI_API_KEY=YOUR_GEMINI_API_KEY
   ```
 
+### Anthropic API Key
+
+Supply your Anthropic API key via:
+
+- **Command-Line Flag:** `--anthropicApiKey YOUR_ANTHROPIC_API_KEY`
+- **Environment Variable:**  
+  ```bash
+  export ANTHROPIC_API_KEY=YOUR_ANTHROPIC_API_KEY
+  ```
+
 ### AI Model Selection
 
-You can choose the AI provider through both the configuration file and command-line flags:
+You can choose the AI provider using both the configuration file and command-line flags:
 
 - **In config.yaml:**  
-  Set the `modelName` field to either `"openai"` or `"gemini"`.  
-  Additionally, specify the desired model in `openaiModel` or `geminiModel` accordingly.
+  Set the `modelName` field to either `"openai"`, `"gemini"`, or `"anthropic"`.  
+  Additionally, specify the desired model in `openaiModel`, `geminiModel`, or `anthropicModel`.
 
 - **Via Command-Line Flags (which override config.yaml):**  
-  - **`--model`**: Specifies the AI provider (`openai` or `gemini`).  
-  - **`--openai-model`**: Sets the OpenAI model (overrides `openaiModel` in config.yaml).  
+  - **`--model`**: Specifies the AI provider (`openai`, `gemini`, or `anthropic`).
+  - **`--openai-model`**: Sets the OpenAI model (overrides `openaiModel` in config.yaml).
   - **`--gemini-model`**: Sets the Gemini model (overrides `geminiModel` in config.yaml).
+  - **`--anthropic-model`**: Sets the Anthropic model (overrides `anthropicModel` in config.yaml).
 
 ### Custom Templates
 
@@ -233,16 +220,22 @@ Run **ai-commit** inside a Git repository with staged changes.
   Your OpenAI API key. If not set, the tool looks for `OPENAI_API_KEY`.
 
 - **`--geminiApiKey`**  
-  Your Gemini API key. If not set, the tool looks for `GEMINI_API_KEY`. Use this when you wish to select Gemini as your AI provider.
+  Your Gemini API key. If not set, the tool looks for `GEMINI_API_KEY`.
+
+- **`--anthropicApiKey`**  
+  Your Anthropic API key. If not set, the tool looks for `ANTHROPIC_API_KEY`.
 
 - **`--model`**  
-  Select the AI model provider to use. Valid options are `openai` (default) or `gemini`. This flag overrides the `modelName` setting in config.yaml.
+  Select the AI model provider to use. Valid options are `openai`, `gemini`, or `anthropic`. This flag overrides the `modelName` setting in config.yaml.
 
 - **`--openai-model`**  
   Specify the OpenAI model to be used (e.g., `gpt-4` or `gpt-4olatest`). Overrides the `openaiModel` setting in config.yaml.
 
 - **`--gemini-model`**  
   Specify the Gemini model to be used (e.g., `models/gemini-2.0-flash`). Overrides the `geminiModel` setting in config.yaml.
+
+- **`--anthropic-model`**  
+  Specify the Anthropic model to be used (e.g., `claude-3-5-sonnet-20241022`). Overrides the `anthropicModel` setting in config.yaml.
 
 - **`--commit-type`**  
   Specify a commit type (`feat`, `fix`, `docs`, etc.). Otherwise the tool may infer it.
@@ -257,7 +250,7 @@ Run **ai-commit** inside a Git repository with staged changes.
   Language used in AI generation (default is `english`).
 
 - **`--semantic-release`**  
-  Triggers AI-assisted version bumping and release tasks (see [Semantic Release](#semantic-release)).
+  Triggers AI-assisted version bumping and release tasks.
 
 - **`--manual-semver`**  
   When used with `--semantic-release`, launches a TUI to manually select the next version (major/minor/patch).
@@ -282,7 +275,7 @@ Run **ai-commit** inside a Git repository with staged changes.
    Builds a prompt including your diff, commit type, and any additional context to send to the AI provider.
 
 4. **AI Request**  
-   Calls the chosen AI provider’s chat completion endpoint (either OpenAI or Gemini) to obtain a commit message.
+   Calls the chosen AI provider’s chat completion endpoint (OpenAI, Gemini, or Anthropic) to obtain a commit message.
 
 5. **Sanitize & Format**  
    Applies Conventional Commits formatting, optionally adds an emoji prefix, and inserts the result into a custom template if provided.
@@ -378,7 +371,20 @@ ai-commit --model gemini --geminiApiKey YOUR_GEMINI_API_KEY
 - **`--gemini-model`**  
   (Optional) Specifies the Gemini model to use; otherwise, the default in config.yaml is applied.
 
-All other flags and UI flows remain identical.
+### 9. Using Anthropic as AI Provider
+
+```bash
+ai-commit --model anthropic --anthropicApiKey YOUR_ANTHROPIC_API_KEY --anthropic-model claude-3-5-sonnet-20241022
+```
+
+- **`--model anthropic`**  
+  Selects the Anthropic provider (overriding `modelName` in config.yaml).
+- **`--anthropicApiKey`**  
+  Supplies your Anthropic API key.
+- **`--anthropic-model`**  
+  (Optional) Specifies the Anthropic model to use; otherwise, the default in config.yaml is applied.
+
+All other flags and UI flows remain identical regardless of the chosen provider.
 
 ---
 
