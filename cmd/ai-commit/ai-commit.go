@@ -31,6 +31,13 @@ import (
 
 const defaultTimeout = 60 * time.Second
 
+// Providers that we support
+const (
+	providerOpenAI    = "openai"
+	providerGemini    = "gemini"
+	providerAnthropic = "anthropic"
+)
+
 // Config represents both our CLI flags/environment overrides and our config.yaml settings.
 type Config struct {
 	Prompt           string `yaml:"prompt,omitempty"`
@@ -39,11 +46,11 @@ type Config struct {
 	SemanticRelease  bool   `yaml:"semanticRelease,omitempty"`
 	InteractiveSplit bool   `yaml:"interactiveSplit,omitempty"`
 	EnableEmoji      bool   `yaml:"enableEmoji,omitempty"`
-	ModelName        string `yaml:"modelName,omitempty"`
+	Provider         string `yaml:"provider,omitempty"` // e.g. "openai", "gemini", or "anthropic"
 
 	// OpenAI-related
 	OpenAIAPIKey string `yaml:"openAiApiKey,omitempty"`
-	OpenAIModel  string `yaml:"openaiModel,omitempty"` // e.g. gogpt.GPT4
+	OpenAIModel  string `yaml:"openaiModel,omitempty"` // e.g. "gpt-4"
 
 	// Gemini-related
 	GeminiAPIKey string `yaml:"geminiApiKey,omitempty"`
@@ -90,15 +97,15 @@ func LoadOrCreateConfig() (*Config, error) {
 			SemanticRelease:  false,
 			InteractiveSplit: false,
 			EnableEmoji:      false,
-			ModelName:        "openai",
+			Provider:         providerOpenAI, // default provider
 			OpenAIAPIKey:     "",
 			OpenAIModel:      gogpt.GPT4, // example default
 			GeminiAPIKey:     "",
 			GeminiModel:      "models/gemini-2.0-flash",
 			AnthropicAPIKey:  "",
-			AnthropicModel:   "claude-3-5-sonnet-20241022",
-			AuthorName:       "ai-commit",         // default commit author name
-			AuthorEmail:      "rennato@gmail.com", // default commit author email
+			AnthropicModel:   "claude-2",
+			AuthorName:       "ai-commit",
+			AuthorEmail:      "ai-commit@example.com",
 		}
 		if err := saveConfig(configPath, defaultCfg); err != nil {
 			return nil, fmt.Errorf("failed to create default config.yaml: %w", err)
@@ -150,44 +157,48 @@ func loadAPIKey(flagVal, envVarName, configVal, provider string) (string, error)
 func initAIClient(
 	ctx context.Context,
 	cfg *Config,
-	modelFlag string,
+	providerFlag string,
 	apiKeyFlag string,
+	modelFlag string,
 	geminiKeyFlag string,
-	openaiModelFlag string,
-	geminiModelFlag string,
 	anthropicKeyFlag string,
-	anthropicModelFlag string,
 ) (ai.AIClient, error) {
 
-	modelName := strings.TrimSpace(modelFlag)
-	if modelName == "" {
+	provider := strings.TrimSpace(providerFlag)
+	if provider == "" {
 		// fallback from config
-		modelName = cfg.ModelName
-	}
-	if modelName != "openai" && modelName != "gemini" && modelName != "anthropic" {
-		return nil, fmt.Errorf("invalid model specified: %s (must be openai, gemini, or anthropic)", modelName)
+		provider = cfg.Provider
 	}
 
-	switch modelName {
-	case "openai":
+	if provider != providerOpenAI && provider != providerGemini && provider != providerAnthropic {
+		return nil, fmt.Errorf("invalid provider specified: %s (must be openai, gemini, or anthropic)", provider)
+	}
+
+	// Decide final sub-model name based on provider + single `--model`
+	var finalModel string
+
+	switch provider {
+	case providerOpenAI:
 		apiKey, err := loadAPIKey(apiKeyFlag, "OPENAI_API_KEY", cfg.OpenAIAPIKey, "openAI")
 		if err != nil {
 			return nil, err
 		}
-		finalModel := openaiModelFlag
-		if strings.TrimSpace(finalModel) == "" {
+		if strings.TrimSpace(modelFlag) != "" {
+			finalModel = modelFlag
+		} else {
 			finalModel = cfg.OpenAIModel
 		}
 		openAIClient := gogpt.NewClient(apiKey)
 		return openai.NewOpenAIClient(openAIClient, finalModel), nil
 
-	case "gemini":
+	case providerGemini:
 		apiKey, err := loadAPIKey(geminiKeyFlag, "GEMINI_API_KEY", cfg.GeminiAPIKey, "gemini")
 		if err != nil {
 			return nil, err
 		}
-		finalModel := geminiModelFlag
-		if strings.TrimSpace(finalModel) == "" {
+		if strings.TrimSpace(modelFlag) != "" {
+			finalModel = modelFlag
+		} else {
 			finalModel = cfg.GeminiModel
 		}
 		geminiClient, err := gemini.NewGeminiProClient(ctx, apiKey, finalModel)
@@ -196,13 +207,14 @@ func initAIClient(
 		}
 		return gemini.NewClient(geminiClient), nil
 
-	case "anthropic":
+	case providerAnthropic:
 		apiKey, err := loadAPIKey(anthropicKeyFlag, "ANTHROPIC_API_KEY", cfg.AnthropicAPIKey, "anthropic")
 		if err != nil {
 			return nil, err
 		}
-		finalModel := anthropicModelFlag
-		if strings.TrimSpace(finalModel) == "" {
+		if strings.TrimSpace(modelFlag) != "" {
+			finalModel = modelFlag
+		} else {
 			finalModel = cfg.AnthropicModel
 		}
 		anthroClient, err := anthropic.NewAnthropicClient(apiKey, finalModel)
@@ -211,6 +223,7 @@ func initAIClient(
 		}
 		return anthroClient, nil
 	}
+
 	return nil, errors.New("no valid AI provider selected")
 }
 
@@ -231,7 +244,7 @@ func main() {
 	git.CommitAuthorEmail = cfgFile.AuthorEmail
 
 	// CLI flags
-	apiKeyFlag := flag.String("apiKey", "", "OpenAI API key (use --apiKey for openai, or see --geminiApiKey / --anthropicApiKey)")
+	apiKeyFlag := flag.String("apiKey", "", "API key for the chosen provider (openai). For Gemini or Anthropic see respective flags below.")
 	geminiAPIKeyFlag := flag.String("geminiApiKey", cfgFile.GeminiAPIKey, "Gemini API key (or set GEMINI_API_KEY env)")
 	anthropicAPIKeyFlag := flag.String("anthropicApiKey", cfgFile.AnthropicAPIKey, "Anthropic API key (or set ANTHROPIC_API_KEY env)")
 
@@ -244,10 +257,9 @@ func main() {
 	emojiFlag := flag.Bool("emoji", cfgFile.EnableEmoji, "Include an emoji prefix in commit message")
 	manualSemverFlag := flag.Bool("manual-semver", false, "Pick the next version manually instead of using AI suggestion")
 
-	modelFlag := flag.String("model", cfgFile.ModelName, "AI model to use (openai, gemini, or anthropropic)")
-	openaiModelFlag := flag.String("openai-model", cfgFile.OpenAIModel, "OpenAI model to use")
-	geminiModelFlag := flag.String("gemini-model", cfgFile.GeminiModel, "Gemini model to use")
-	anthropicModelFlag := flag.String("anthropic-model", cfgFile.AnthropicModel, "Anthropic model to use")
+	// Instead of --openai-model/--gemini-model/--anthropic-model, use a single --model
+	providerFlag := flag.String("provider", cfgFile.Provider, "AI provider to use (openai, gemini, or anthropic)")
+	modelFlag := flag.String("model", "", "Sub-model to use for the chosen provider (e.g. gpt-4, models/gemini-2.0, claude-2)")
 
 	flag.Parse()
 
@@ -259,13 +271,11 @@ func main() {
 	aiClient, err := initAIClient(
 		ctx,
 		cfgFile,
-		*modelFlag,
+		*providerFlag,
 		*apiKeyFlag,
+		*modelFlag,
 		*geminiAPIKeyFlag,
-		*openaiModelFlag,
-		*geminiModelFlag,
 		*anthropicAPIKeyFlag,
-		*anthropicModelFlag,
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to initialize AI client")
