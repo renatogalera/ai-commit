@@ -14,8 +14,8 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/ai"
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/git"
-	"github.com/renatogalera/ai-commit/pkg/openai"
 	"github.com/renatogalera/ai-commit/pkg/prompt"
+	"github.com/renatogalera/ai-commit/pkg/provider/openai"
 	"github.com/renatogalera/ai-commit/pkg/template"
 )
 
