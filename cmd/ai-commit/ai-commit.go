@@ -250,14 +250,13 @@ func newSummarizeCmd(setupAIEnvironment func() (context.Context, context.CancelF
 ai-commit fetches that commit's diff and calls the AI provider to produce a summary.
 The resulting output is rendered with a beautiful TUI-like style.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			runSummarizeCommand(cmd, args, setupAIEnvironment)
+			runSummarizeCommand(setupAIEnvironment)
 		},
 	}
 	return cmd
 }
 
-// runSummarizeCommand sets up the AI environment and calls the summarizer.
-func runSummarizeCommand(cmd *cobra.Command, args []string, setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) {
+func runSummarizeCommand(setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) {
 	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Setup environment error for summarize command")
