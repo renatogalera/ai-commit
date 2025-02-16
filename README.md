@@ -147,14 +147,19 @@ API Keys via Environment Variables:
 *   `--manual-semver`: With `--semantic-release`, manually select version type in TUI.
 *   `--interactive-split`: Launches chunk-based commit splitting TUI.
 *   `--emoji`: Adds emojis to commit messages based on type.
-*    `--review-message`:  **NEW** - Enable AI-powered commit message style review. After generating a commit message, AI-Commit will also send it for style review and provide feedback in the terminal, helping ensure high-quality, informative commit messages.
+*    `--review-message`:  Enable AI-powered commit message style review. After generating a commit message, AI-Commit sends it to AI for a style review. Feedback is provided in the terminal output, ensuring commit messages are clear, informative, and adhere to best practices.
 
 **Subcommand**:
 
-*   `review`: Trigger AI-powered code review of staged changes: 
+*   `review`: Trigger AI-powered code review of staged changes:
     ```bash
-    ai-commit review 
+    ai-commit review
     ```
+*   `summarize`: **NEW** - Summarize a selected commit using AI. Uses `fzf` to pick a commit from the commit history, then displays an AI-generated summary of that commit.
+     ```bash
+     ai-commit summarize
+     ```
+
 
 ---
 
@@ -174,7 +179,7 @@ API Keys via Environment Variables:
 
 3.  **Basic Commit Message Generation**:
     ```bash
-    ai-commit 
+    ai-commit
     ```
      Standard interactive commit message generation, without style review.
 
@@ -193,7 +198,7 @@ API Keys via Environment Variables:
 6.  **Provider and Model Selection**:
     ```bash
     ai-commit --provider=openai --model=gpt-4 --apiKey=sk-...
-    ai-commit --provider=gemini --model=models/gemini-2.0-flash --geminiApiKey=... 
+    ai-commit --provider=gemini --model=models/gemini-2.0-flash --geminiApiKey=...
     ai-commit --provider=anthropic --model=claude-3-sonnet --anthropicApiKey=...
     ai-commit --provider=deepseek --model=deepseek-chat --deepseekApiKey=...
     ```
@@ -203,6 +208,12 @@ API Keys via Environment Variables:
     ai-commit --interactive-split
     ```
     Starts interactive split TUI.
+
+8.  **Summarize a Commit**:
+    ```bash
+    ai-commit summarize
+    ```
+    Lists commits with `fzf`, and after you pick one, shows an AI-generated summary in the terminal.
 
 ---
 

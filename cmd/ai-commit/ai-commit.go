@@ -69,7 +69,16 @@ var reviewCmd = &cobra.Command{
 	Run:   runAICodeReview,
 }
 
+var summarizeCmd = &cobra.Command{
+	Use:   "summarize",
+	Short: "List commits via fzf, pick one, and summarize the commit with AI",
+	Long: `Displays all commits in a fuzzy finder interface; after selecting a commit,
+AI-Commit fetches that commit's diff and calls the AI provider to produce a summary.`,
+	Run: runSummarizeCommand,
+}
+
 func init() {
+
 	rootCmd.Flags().StringVar(&apiKeyFlag, "apiKey", "", "API key for OpenAI provider (or env OPENAI_API_KEY)")
 	rootCmd.Flags().StringVar(&geminiAPIKeyFlag, "geminiApiKey", "", "API key for Gemini provider (or env GEMINI_API_KEY)")
 	rootCmd.Flags().StringVar(&anthropicAPIKeyFlag, "anthropicApiKey", "", "API key for Anthropic provider (or env ANTHROPIC_API_KEY)")
@@ -86,7 +95,7 @@ func init() {
 	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, gemini, anthropic, deepseek")
 	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Sub-model for the chosen provider")
 	rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
-
+	rootCmd.AddCommand(summarizeCmd)
 	rootCmd.AddCommand(reviewCmd)
 }
 
@@ -213,16 +222,30 @@ func setupLogger() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 }
 
-// setupAIEnvironment loads config, validates flags, initializes AI client, checks Git repo
+// runSummarizeCommand is just a stub referencing the code in summarize_cmd.go
+func runSummarizeCommand(cmd *cobra.Command, args []string) {
+	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Setup environment error for summarize command")
+		return
+	}
+	defer cancel()
+
+	if err := SummarizeCommits(ctx, aiClient, cfg); err != nil {
+		log.Fatal().Err(err).Msg("Failed to summarize commits")
+	}
+}
+
+// This is your existing function that configures everything
 func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error) {
 	cfg, err := config.LoadOrCreateConfig()
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("%s: %w", errMsgLoadConfig, err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	cfgCopy, err := validateFlagsAndConfig(cfg)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("%s: %w", errMsgValidation, err)
+		return nil, nil, nil, nil, fmt.Errorf("config validation failed: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
@@ -230,12 +253,12 @@ func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, 
 	aiClient, err := initAIClient(ctx, cfgCopy)
 	if err != nil {
 		cancel()
-		return nil, nil, nil, nil, fmt.Errorf("%s: %w", errMsgInitAIClient, err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to initialize AI client: %w", err)
 	}
 
 	if !git.IsGitRepository(ctx) {
 		cancel()
-		return nil, nil, nil, nil, fmt.Errorf("%s", errMsgNotGitRepository)
+		return nil, nil, nil, nil, fmt.Errorf("not a valid Git repository")
 	}
 
 	config.DefaultAuthorName = cfgCopy.AuthorName
@@ -282,6 +305,7 @@ func isValidProvider(provider string) bool {
 
 // initAIClient picks and configures the correct AI client based on config and CLI flags
 func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) {
+	// your existing provider-switch code:
 	switch cfg.Provider {
 	case "openai":
 		key, err := config.ResolveAPIKey(apiKeyFlag, "OPENAI_API_KEY", cfg.OpenAIAPIKey, "openai")
