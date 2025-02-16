@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install Goreleaser
+        run: |
+          curl -sL https://git.io/goreleaser | bash
+
+      - name: Run Goreleaser
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: goreleaser release --clean
+
