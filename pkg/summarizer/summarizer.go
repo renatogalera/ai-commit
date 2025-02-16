@@ -181,4 +181,3 @@ func firstLine(msg string) string {
 	lines := strings.Split(msg, "\n")
 	return strings.TrimSpace(lines[0])
 }
-
