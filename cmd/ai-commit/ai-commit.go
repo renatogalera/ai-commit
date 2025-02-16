@@ -1,4 +1,3 @@
-// main.go
 package main
 
 import (
@@ -29,7 +28,6 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/versioner"
 )
 
-// Global flag variables.
 var (
 	apiKeyFlag           string
 	geminiAPIKeyFlag     string
@@ -49,7 +47,6 @@ var (
 	reviewMessageFlag    bool
 )
 
-// rootCmd is the primary Cobra command.
 var rootCmd = &cobra.Command{
 	Use:   "ai-commit",
 	Short: "AI-Commit: Generate Git commit messages and review code with AI",
@@ -93,38 +90,6 @@ func init() {
 	rootCmd.AddCommand(reviewCmd)
 }
 
-// validateFlagsAndConfig merges CLI flag values into the config struct.
-// The caller supplies a helper function (flagProvided) that checks whether a flag was explicitly set.
-func validateFlagsAndConfig(cfg *config.Config, flagProvided func(string) bool) (*config.Config, error) {
-	cfgCopy := *cfg
-
-	if providerFlag != "" {
-		cfgCopy.Provider = providerFlag
-	}
-	if cfgCopy.Provider == "" {
-		cfgCopy.Provider = config.DefaultProvider
-	}
-
-	if !isValidProvider(cfgCopy.Provider) {
-		return nil, fmt.Errorf("invalid provider: %s", cfgCopy.Provider)
-	}
-
-	if commitTypeFlag != "" && !committypes.IsValidCommitType(commitTypeFlag) {
-		return nil, fmt.Errorf("invalid commit type: %s", commitTypeFlag)
-	}
-
-	// Merge emoji flag: if the user did not explicitly pass --emoji, use the config value.
-	if !flagProvided("emoji") {
-		emojiFlag = cfgCopy.EnableEmoji
-	}
-
-	if err := cfgCopy.Validate(); err != nil {
-		return nil, err
-	}
-
-	return &cfgCopy, nil
-}
-
 // isValidProvider returns true if the specified provider is supported.
 func isValidProvider(provider string) bool {
 	validProviders := map[string]bool{
@@ -142,30 +107,52 @@ func setupLogger() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 }
 
-// setupAIEnvironment loads (or creates) the config, merges CLI flags, and initializes the AI client.
+// setupAIEnvironment loads the configuration, merges CLI flags with the config file,
+// and initializes the AI client.
 func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error) {
 	cfg, err := config.LoadOrCreateConfig()
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Define a local helper to check if a flag was explicitly set.
-	flagProvided := func(name string) bool {
-		f := rootCmd.Flags().Lookup(name)
-		return f != nil && f.Changed
+	// Create a ConfigManager and register CLI flag values.
+	cm := config.NewConfigManager(cfg)
+	cm.RegisterFlag("provider", providerFlag)
+	cm.RegisterFlag("openAiApiKey", apiKeyFlag)
+	cm.RegisterFlag("geminiApiKey", geminiAPIKeyFlag)
+	cm.RegisterFlag("anthropicApiKey", anthropicAPIKeyFlag)
+	cm.RegisterFlag("deepseekApiKey", deepseekAPIKeyFlag)
+	cm.RegisterFlag("phindApiKey", phindAPIKeyFlag)
+	cm.RegisterFlag("commitType", commitTypeFlag)
+	cm.RegisterFlag("template", templateFlag)
+	cm.RegisterFlag("semanticRelease", semanticReleaseFlag)
+	cm.RegisterFlag("interactiveSplit", interactiveSplitFlag)
+	cm.RegisterFlag("enableEmoji", emojiFlag)
+
+	mergedCfg := cm.MergeConfiguration()
+
+	// Set default provider if not provided.
+	if mergedCfg.Provider == "" {
+		mergedCfg.Provider = config.DefaultProvider
 	}
 
-	cfgCopy, err := validateFlagsAndConfig(cfg, flagProvided)
-	if err != nil {
+	if !isValidProvider(mergedCfg.Provider) {
+		return nil, nil, nil, nil, fmt.Errorf("invalid provider: %s", mergedCfg.Provider)
+	}
+
+	if commitTypeFlag != "" && !committypes.IsValidCommitType(commitTypeFlag) {
+		return nil, nil, nil, nil, fmt.Errorf("invalid commit type: %s", commitTypeFlag)
+	}
+
+	if err := mergedCfg.Validate(); err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("config validation failed: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 
-	// Initialize commit types from the loaded config.
-	committypes.InitCommitTypes(cfgCopy.CommitTypes)
+	committypes.InitCommitTypes(mergedCfg.CommitTypes)
 
-	aiClient, err := initAIClient(ctx, cfgCopy)
+	aiClient, err := initAIClient(ctx, mergedCfg)
 	if err != nil {
 		cancel()
 		return nil, nil, nil, nil, fmt.Errorf("failed to initialize AI client: %w", err)
@@ -176,13 +163,12 @@ func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, 
 		return nil, nil, nil, nil, fmt.Errorf("not a valid Git repository")
 	}
 
-	config.DefaultAuthorName = cfgCopy.AuthorName
-	config.DefaultAuthorEmail = cfgCopy.AuthorEmail
+	config.DefaultAuthorName = mergedCfg.AuthorName
+	config.DefaultAuthorEmail = mergedCfg.AuthorEmail
 
-	return ctx, cancel, cfgCopy, aiClient, nil
+	return ctx, cancel, mergedCfg, aiClient, nil
 }
 
-// initAIClient selects and creates the appropriate AI client based on config and CLI flags.
 func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) {
 	switch cfg.Provider {
 	case "openai":
@@ -265,27 +251,23 @@ func runAICommit(cmd *cobra.Command, args []string) {
 	}
 	defer cancel()
 
-	// If interactive commit splitting is enabled, run it.
 	if interactiveSplitFlag {
 		runInteractiveSplit(ctx, aiClient, semanticReleaseFlag, manualSemverFlag)
 		return
 	}
 
-	// Get the Git diff.
 	diff, err := git.GetGitDiff(ctx)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to get Git diff")
 		return
 	}
 
-	// Filter out lock files as configured.
 	diff = git.FilterLockFiles(diff, cfg.LockFiles)
 	if strings.TrimSpace(diff) == "" {
 		fmt.Println("No staged changes after filtering lock files.")
 		return
 	}
 
-	// Generate commit message via AI.
 	promptText := prompt.BuildCommitPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate)
 	commitMsg, genErr := generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, emojiFlag)
 	if genErr != nil {
@@ -293,7 +275,6 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// If commit style review is enabled.
 	var styleReviewSuggestions string
 	if reviewMessageFlag {
 		suggestions, errReview := enforceCommitMessageStyle(ctx, aiClient, commitMsg, languageFlag, cfg.PromptTemplate)
@@ -304,7 +285,6 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		styleReviewSuggestions = suggestions
 	}
 
-	// If force commit is enabled.
 	if forceFlag {
 		if reviewMessageFlag && strings.TrimSpace(styleReviewSuggestions) != "" &&
 			!strings.Contains(strings.ToLower(styleReviewSuggestions), "no issues found") {
@@ -326,11 +306,9 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Launch the interactive UI.
 	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, aiClient)
 }
 
-// runAICodeReview handles the "review" command.
 func runAICodeReview(cmd *cobra.Command, args []string) {
 	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
 	if err != nil {
@@ -360,7 +338,6 @@ func runAICodeReview(cmd *cobra.Command, args []string) {
 	fmt.Println(strings.TrimSpace(reviewResult))
 }
 
-// generateCommitMessage calls the AI client and applies commit type and template.
 func generateCommitMessage(
 	ctx context.Context,
 	client ai.AIClient,
@@ -393,7 +370,6 @@ func generateCommitMessage(
 	return strings.TrimSpace(msg), nil
 }
 
-// enforceCommitMessageStyle uses AI to review the commit message style.
 func enforceCommitMessageStyle(
 	ctx context.Context,
 	client ai.AIClient,
@@ -409,7 +385,6 @@ func enforceCommitMessageStyle(
 	return strings.TrimSpace(styleReviewResult), nil
 }
 
-// runInteractiveUI launches the interactive TUI.
 func runInteractiveUI(
 	ctx context.Context,
 	commitMsg string,
@@ -446,7 +421,6 @@ func runInteractiveUI(
 	}
 }
 
-// runInteractiveSplit launches the interactive commit splitting TUI.
 func runInteractiveSplit(
 	ctx context.Context,
 	aiClient ai.AIClient,
