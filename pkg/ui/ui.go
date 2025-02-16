@@ -54,11 +54,6 @@ var (
 	logoText = `AI-COMMIT TUI
 	`
 
-	topBarStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("236")).
-			Foreground(lipgloss.Color("252")).
-			Padding(0, 1)
-
 	commitBoxStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("63")).
@@ -327,7 +322,6 @@ func (m Model) View() string {
 // viewShowCommit ...
 func (m Model) viewShowCommit() string {
 	header := renderLogo()
-	topBar := m.renderTopBar()
 	footer := m.renderFooter()
 
 	content := commitBoxStyle.Render(m.commitMsg)
@@ -342,7 +336,6 @@ func (m Model) viewShowCommit() string {
 	ui := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
-		topBar,
 		mainCols,
 		footer,
 	)
@@ -351,14 +344,12 @@ func (m Model) viewShowCommit() string {
 
 func (m Model) viewGenerating() string {
 	header := renderLogo()
-	topBar := m.renderTopBar()
 	body := fmt.Sprintf("Generating commit message...\n\n%s", m.spinner.View())
 	footer := m.renderFooter()
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
-		topBar,
 		body,
 		footer,
 	)
@@ -366,14 +357,12 @@ func (m Model) viewGenerating() string {
 
 func (m Model) viewCommitting() string {
 	header := renderLogo()
-	topBar := m.renderTopBar()
 	body := fmt.Sprintf("Committing...\n\n%s", m.spinner.View())
 	footer := m.renderFooter()
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
-		topBar,
 		body,
 		footer,
 	)
@@ -392,7 +381,6 @@ func (m Model) viewResult() string {
 
 func (m Model) viewSelectType() string {
 	header := renderLogo()
-	topBar := m.renderTopBar()
 
 	var b strings.Builder
 	b.WriteString("Select commit type:\n\n")
@@ -411,7 +399,6 @@ func (m Model) viewSelectType() string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
-		topBar,
 		b.String(),
 		footer,
 	)
@@ -419,24 +406,18 @@ func (m Model) viewSelectType() string {
 
 func (m Model) viewEditing(title string) string {
 	header := renderLogo()
-	topBar := m.renderTopBar()
 
 	body := lipgloss.NewStyle().Margin(1, 2).Render(
 		fmt.Sprintf("%s\n\n%s", title, m.textarea.View()),
 	)
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, topBar, body)
+	return lipgloss.JoinVertical(lipgloss.Left, header, body)
 }
 
 // --- Helpers ---
 
 func renderLogo() string {
 	return logoStyle.Render(logoText)
-}
-
-func (m Model) renderTopBar() string {
-	status := fmt.Sprintf("Type: %s | Regens: %d/%d", m.commitType, m.regenCount, m.maxRegens)
-	return topBarStyle.Render(status)
 }
 
 func (m Model) renderSideInfo() string {
