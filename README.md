@@ -1,11 +1,12 @@
 # AI-Commit
 
-**AI-Commit** is a powerful tool that generates [Conventional Commits](https://www.conventionalcommits.org/) using AI (OpenAI, Google Gemini, Anthropic Claude), DeepSeek. *Automatically generate commit messages for Git, saving you time and improving your commit history.*
+**AI-Commit** is a powerful tool that generates [Conventional Commits](https://www.conventionalcommits.org/) using AI (OpenAI, Google Gemini, Anthropic Claude, DeepSeek). *Automatically generate commit messages for Git, saving you time and improving your commit history.*
 
 It supports:
 - **OpenAI**
 - **Google Gemini**
 - **Anthropic Claude**
+- **DeepSeek**
 
 Writing good commit messages can be time-consuming. AI-Commit solves this problem by automatically generating clear, concise, and consistent commit messages, enforcing the Conventional Commits standard and leveraging the power of leading AI models.  Whether you're using GPT-4, Gemini, or Claude, AI-Commit streamlines your workflow.
 
