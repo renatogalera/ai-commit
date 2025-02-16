@@ -7,17 +7,14 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 )
 
-// DefaultPromptTemplate is used if no template is configured
-const DefaultPromptTemplate = `Generate a git commit message following these guidelines:
-- Use the Conventional Commits format (e.g., 'feat: add new feature X', 'fix(login): handle edge case').
-- Keep the subject line concise (under 50 characters) and in the imperative mood.
-- If there are breaking changes, include 'BREAKING CHANGE:' in the commit body.
-- After the subject line, add a blank line, then list changes with bullet points (using "- ").
-- Omit disclaimers, code blocks, or references to AI.
-- Use the present tense and ensure clarity.
-- Output only the commit message (do not include the commit hash or branch name).
-- For README edits, simply state that the README has been updated.
-- Avoid unnecessary repetition; express each idea only once.
+// DefaultPromptTemplate is used if no template is configured.
+const DefaultPromptTemplate = `Generate a git commit message that is clear, concise, and follows the Conventional Commits format:
+- Use the format "type: subject" (e.g., "fix: correct error handling").
+- Keep the subject line under 50 characters and in the imperative mood.
+- If there are breaking changes, include "BREAKING CHANGE:" in the body.
+- After the subject line, leave a blank line and then list key changes with bullet points.
+- Do not include extraneous details such as commit hash, branch name, spacing details, or formatting guidelines.
+- Avoid repeating information.
 {COMMIT_TYPE_HINT}
 - Write the message in {LANGUAGE}.
 
@@ -26,7 +23,7 @@ Diff:
 {ADDITIONAL_CONTEXT}
 `
 
-// DefaultCodeReviewPromptTemplate template for code review prompts
+// DefaultCodeReviewPromptTemplate template for code review prompts.
 const DefaultCodeReviewPromptTemplate = `Review the following code diff for potential issues, and provide suggestions, following these rules:
 - Identify potential style issues, refactoring opportunities, and basic security risks if any.
 - Focus on code quality and best practices.
@@ -40,7 +37,7 @@ Diff:
 {DIFF}
 `
 
-// DefaultCommitStyleReviewPromptTemplate template for commit message style review prompts
+// DefaultCommitStyleReviewPromptTemplate template for commit message style review prompts.
 const DefaultCommitStyleReviewPromptTemplate = `Review the following commit message for clarity, informativeness, and adherence to best practices. Provide feedback in bullet points if the message is lacking in any way. Focus on these aspects:
 
 - **Clarity**: Is the message clear and easy to understand? Would someone unfamiliar with the changes easily grasp the intent?
