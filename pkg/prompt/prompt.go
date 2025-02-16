@@ -5,11 +5,10 @@ import (
 	"strings"
 
 	gogitobj "github.com/go-git/go-git/v5/plumbing/object"
-
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 )
 
-// DefaultPromptTemplate is used if no template is configured.
+// DefaultPromptTemplate is used if no template is configured for commit message generation.
 const DefaultPromptTemplate = `Generate a git commit message that is clear, concise, and follows the Conventional Commits format:
 - Use the format "type: subject" (e.g., "fix: correct error handling").
 - Keep the subject line under 50 characters and in the imperative mood.
@@ -25,7 +24,7 @@ Diff:
 {ADDITIONAL_CONTEXT}
 `
 
-// DefaultCodeReviewPromptTemplate template for code review prompts.
+// DefaultCodeReviewPromptTemplate is used for code review prompts.
 const DefaultCodeReviewPromptTemplate = `Review the following code diff for potential issues, and provide suggestions, following these rules:
 - Identify potential style issues, refactoring opportunities, and basic security risks if any.
 - Focus on code quality and best practices.
@@ -39,7 +38,7 @@ Diff:
 {DIFF}
 `
 
-// DefaultCommitStyleReviewPromptTemplate template for commit message style review prompts.
+// DefaultCommitStyleReviewPromptTemplate is used for reviewing commit message style.
 const DefaultCommitStyleReviewPromptTemplate = `Review the following commit message for clarity, informativeness, and adherence to best practices. Provide feedback in bullet points if the message is lacking in any way. Focus on these aspects:
 
 - **Clarity**: Is the message clear and easy to understand? Would someone unfamiliar with the changes easily grasp the intent?
@@ -55,8 +54,14 @@ Commit Message to Review:
 Language for feedback MUST be {LANGUAGE}.
 `
 
+// defaultCommitSummaryTemplate is used to generate a summary of the git commit in markdown format.
 const defaultCommitSummaryTemplate = `Summarize the following git commit in markdown format.
 Use "###" to denote section titles. Include:
+
+
+Rule 1: don't send any text other than the request, don't say you're sending markdown or anything
+Rule 2 send everything from General Summary and nothing else
+Rule 3: Do not send similar text like "Here's a summary of the git commit in markdown format:"
 
 ### General Summary
 - Main purpose or key changes
@@ -77,9 +82,9 @@ Diff:
 {DIFF}
 `
 
-// buildCommitSummaryPrompt constructs the prompt used to ask the AI for a summary.
+// BuildCommitSummaryPrompt constructs the prompt used to ask the AI for a commit summary.
+// It replaces placeholders with actual commit information and the diff string.
 func BuildCommitSummaryPrompt(commit *gogitobj.Commit, diffStr, customPromptTemplate string) string {
-
 	templateUsed := defaultCommitSummaryTemplate
 	if strings.TrimSpace(customPromptTemplate) != "" {
 		templateUsed = customPromptTemplate
@@ -93,10 +98,9 @@ func BuildCommitSummaryPrompt(commit *gogitobj.Commit, diffStr, customPromptTemp
 	return promptText
 }
 
-// BuildCommitPrompt builds the prompt for commit message generation.
-func BuildCommitPrompt(diff string, language string, commitType string, additionalText string, promptTemplate string) string {
-	var sb strings.Builder
-
+// BuildCommitPrompt builds the prompt for generating a commit message.
+// It replaces placeholders with the provided diff, language, commit type, and any additional context.
+func BuildCommitPrompt(diff, language, commitType, additionalText, promptTemplate string) string {
 	finalTemplate := promptTemplate
 	if finalTemplate == "" {
 		finalTemplate = DefaultPromptTemplate
@@ -117,14 +121,12 @@ func BuildCommitPrompt(diff string, language string, commitType string, addition
 	}
 	promptText = strings.ReplaceAll(promptText, "{ADDITIONAL_CONTEXT}", additionalContextStr)
 
-	sb.WriteString(promptText)
-	return sb.String()
+	return promptText
 }
 
-// BuildCodeReviewPrompt builds the prompt for code review.
-func BuildCodeReviewPrompt(diff string, language string, promptTemplate string) string {
-	var sb strings.Builder
-
+// BuildCodeReviewPrompt builds the prompt for a code review.
+// It replaces placeholders with the provided diff and language.
+func BuildCodeReviewPrompt(diff, language, promptTemplate string) string {
 	finalTemplate := promptTemplate
 	if finalTemplate == "" {
 		finalTemplate = DefaultCodeReviewPromptTemplate
@@ -133,14 +135,12 @@ func BuildCodeReviewPrompt(diff string, language string, promptTemplate string) 
 	promptText := strings.ReplaceAll(finalTemplate, "{LANGUAGE}", language)
 	promptText = strings.ReplaceAll(promptText, "{DIFF}", diff)
 
-	sb.WriteString(promptText)
-	return sb.String()
+	return promptText
 }
 
-// BuildCommitStyleReviewPrompt builds the prompt for commit message style review.
-func BuildCommitStyleReviewPrompt(commitMsg string, language string, promptTemplate string) string {
-	var sb strings.Builder
-
+// BuildCommitStyleReviewPrompt builds the prompt for reviewing the style of a commit message.
+// It replaces placeholders with the commit message and language.
+func BuildCommitStyleReviewPrompt(commitMsg, language, promptTemplate string) string {
 	finalTemplate := promptTemplate
 	if finalTemplate == "" {
 		finalTemplate = DefaultCommitStyleReviewPromptTemplate
@@ -149,6 +149,16 @@ func BuildCommitStyleReviewPrompt(commitMsg string, language string, promptTempl
 	promptText := strings.ReplaceAll(finalTemplate, "{LANGUAGE}", language)
 	promptText = strings.ReplaceAll(promptText, "{COMMIT_MESSAGE}", commitMsg)
 
-	sb.WriteString(promptText)
-	return sb.String()
+	return promptText
+}
+
+func ExtractSummaryAfterGeneral(aiOutput string) string {
+	markers := []string{"### General Summary", "General Summary"}
+	for _, marker := range markers {
+		index := strings.Index(aiOutput, marker)
+		if index != -1 {
+			return aiOutput[index:]
+		}
+	}
+	return aiOutput
 }
