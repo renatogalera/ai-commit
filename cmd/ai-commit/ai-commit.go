@@ -11,7 +11,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"github.com/renatogalera/ai-commit/cmd"
 	"github.com/renatogalera/ai-commit/pkg/ai"
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/config"
@@ -22,6 +21,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/provider/gemini"
 	"github.com/renatogalera/ai-commit/pkg/provider/openai"
 	"github.com/renatogalera/ai-commit/pkg/provider/phind"
+	"github.com/renatogalera/ai-commit/pkg/summarizer"
 	"github.com/renatogalera/ai-commit/pkg/template"
 	"github.com/renatogalera/ai-commit/pkg/ui"
 	"github.com/renatogalera/ai-commit/pkg/ui/splitter"
@@ -86,7 +86,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
 
 	// Register additional commands.
-	rootCmd.AddCommand(cmd.NewSummarizeCmd(setupAIEnvironment))
+	rootCmd.AddCommand(newSummarizeCmd(setupAIEnvironment))
 	rootCmd.AddCommand(reviewCmd)
 }
 
@@ -242,6 +242,34 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 	return nil, fmt.Errorf("invalid provider specified: %s", cfg.Provider)
 }
 
+func newSummarizeCmd(setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "summarize",
+		Short: "List commits via fzf, pick one, and summarize the commit with AI",
+		Long: `Displays all commits in a fuzzy finder interface; after selecting a commit,
+ai-commit fetches that commit's diff and calls the AI provider to produce a summary.
+The resulting output is rendered with a beautiful TUI-like style.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			runSummarizeCommand(cmd, args, setupAIEnvironment)
+		},
+	}
+	return cmd
+}
+
+// runSummarizeCommand sets up the AI environment and calls the summarizer.
+func runSummarizeCommand(cmd *cobra.Command, args []string, setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) {
+	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Setup environment error for summarize command")
+		return
+	}
+	defer cancel()
+
+	if err := summarizer.SummarizeCommits(ctx, aiClient, cfg); err != nil {
+		log.Fatal().Err(err).Msg("Failed to summarize commits")
+	}
+}
+
 // runAICommit is the main command handler.
 func runAICommit(cmd *cobra.Command, args []string) {
 	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
@@ -269,7 +297,7 @@ func runAICommit(cmd *cobra.Command, args []string) {
 	}
 
 	promptText := prompt.BuildCommitPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate)
-	commitMsg, genErr := generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, emojiFlag)
+	commitMsg, genErr := generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, cfg.EnableEmoji)
 	if genErr != nil {
 		log.Error().Err(genErr).Msg("Commit message generation error")
 		os.Exit(1)
@@ -306,7 +334,8 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, aiClient)
+	// Aqui usamos cfg.EnableEmoji em vez de emojiFlag
+	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, cfg.EnableEmoji, aiClient)
 }
 
 func runAICodeReview(cmd *cobra.Command, args []string) {
@@ -391,6 +420,7 @@ func runInteractiveUI(
 	diff string,
 	promptText string,
 	styleReviewSuggestions string,
+	enableEmoji bool, // novo parâmetro
 	aiClient ai.AIClient,
 ) {
 	uiModel := ui.NewUIModel(
@@ -401,7 +431,7 @@ func runInteractiveUI(
 		commitTypeFlag,
 		templateFlag,
 		styleReviewSuggestions,
-		emojiFlag,
+		enableEmoji,
 		aiClient,
 	)
 	program := ui.NewProgram(uiModel)
