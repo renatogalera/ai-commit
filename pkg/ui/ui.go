@@ -26,16 +26,15 @@ import (
 type uiState int
 
 const (
-	stateShowCommit    uiState = iota // Show the current commit message.
-	stateGenerating                   // Currently waiting for the AI to regenerate.
-	stateCommitting                   // Waiting for the commit command to finish.
-	stateResult                       // Final result state (success or error).
-	stateSelectType                   // UI for selecting commit type.
-	stateEditing                      // UI for editing the commit message.
-	stateEditingPrompt                // UI for editing the prompt text.
+	stateShowCommit uiState = iota
+	stateGenerating
+	stateCommitting
+	stateResult
+	stateSelectType
+	stateEditing
+	stateEditingPrompt
 )
 
-// Internal message types used for Bubble Tea updates.
 type (
 	commitResultMsg struct{ err error }
 	regenMsg        struct {
@@ -46,36 +45,26 @@ type (
 )
 
 // --- Lipgloss Styles ---
-// You can customize colors, borders, widths, etc. as you like.
+
 var (
-	// ASCII art title/border color
 	logoStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("62"))
 
-	// A more elaborate ASCII logo at the top
-	logoText = `
-  _     ___ ___      _          _ _ 
- /_\   / __| _ \_  _| |__  __ _| | |
-/ _ \  \__ \  _/ || | '_ \/ _' | | |
-/_/ \_\|___/_|  \_,_|_.__/\__,_|_|_|
-         AI-COMMIT TUI
-`
+	logoText = `AI-COMMIT TUI
+	`
 
-	// Top bar style (e.g., status, commit type, remaining regens)
 	topBarStyle = lipgloss.NewStyle().
 			Background(lipgloss.Color("236")).
 			Foreground(lipgloss.Color("252")).
 			Padding(0, 1)
 
-	// Commit message box
 	commitBoxStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("63")).
 			Padding(1, 2).
 			Margin(1, 1)
 
-	// Side info box in the main layout
 	sideBoxStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("63")).
@@ -83,13 +72,11 @@ var (
 			Margin(1, 1).
 			Width(30)
 
-	// Footer/help box
 	footerStyle = lipgloss.NewStyle().
 			Background(lipgloss.Color("236")).
 			Foreground(lipgloss.Color("252")).
 			Padding(0, 1)
 
-	// Highlighted text style
 	highlightStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("212")).
 			Bold(true)
@@ -109,15 +96,12 @@ type Model struct {
 	enableEmoji bool
 	aiClient    ai.AIClient
 
-	// Commit type selection
 	selectedIndex int
 	commitTypes   []string
 
-	// Counters for regeneration attempts
 	regenCount int
 	maxRegens  int
 
-	// Textarea for editing commit messages or prompt text
 	textarea textarea.Model
 }
 
@@ -136,6 +120,14 @@ func NewUIModel(
 	ta.SetWidth(50)
 	ta.SetHeight(10)
 	ta.ShowLineNumbers = false
+
+	// If user didn't explicitly set commitType, try to guess from the commitMsg itself
+	if commitType == "" {
+		guessed := guessCommitTypeFromMessage(commitMsg)
+		if guessed != "" {
+			commitType = guessed
+		}
+	}
 
 	return Model{
 		state:         stateShowCommit,
@@ -179,6 +171,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "y", "enter":
 				m.state = stateCommitting
 				return m, commitCmd(m.commitMsg)
+
 			case "r":
 				if m.regenCount >= m.maxRegens {
 					m.result = fmt.Sprintf("Maximum regenerations (%d) reached.", m.maxRegens)
@@ -190,16 +183,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinner.Spinner = spinner.Dot
 				m.regenCount++
 				return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
+
 			case "q", "ctrl+c":
 				return m, tea.Quit
+
 			case "t":
 				m.state = stateSelectType
 				return m, nil
+
 			case "e":
 				m.state = stateEditing
 				m.textarea.SetValue(m.commitMsg)
 				m.textarea.Focus()
 				return m, nil
+
 			case "p":
 				m.state = stateEditingPrompt
 				m.textarea.SetValue("")
@@ -212,6 +209,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "q", "esc", "ctrl+c":
 				m.state = stateShowCommit
 				return m, nil
+
 			case "up", "k":
 				if m.selectedIndex > 0 {
 					m.selectedIndex--
@@ -272,7 +270,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = stateResult
 			return m, autoQuitCmd()
 		}
+		// Update commit message
 		m.commitMsg = msg.msg
+		// If still no commitType, guess from the newly regenerated message
+		if m.commitType == "" {
+			if guessed := guessCommitTypeFromMessage(m.commitMsg); guessed != "" {
+				m.commitType = guessed
+			}
+		}
 		m.state = stateShowCommit
 		return m, nil
 
@@ -294,7 +299,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
-
 	return m, cmd
 }
 
@@ -320,27 +324,21 @@ func (m Model) View() string {
 	}
 }
 
-// --- STATE-SPECIFIC VIEWS ---
-
-// viewShowCommit displays the main commit message, plus a side info box (commit type,
-// regens left, etc.), plus a footer with help instructions.
+// viewShowCommit ...
 func (m Model) viewShowCommit() string {
-	var (
-		header  = renderLogo()
-		topBar  = m.renderTopBar() // Some status info
-		footer  = m.renderFooter() // Help text
-		content = commitBoxStyle.Render(m.commitMsg)
-		side    = m.renderSideInfo() // Right column with commit type, regen info, etc.
-	)
+	header := renderLogo()
+	topBar := m.renderTopBar()
+	footer := m.renderFooter()
 
-	// Two-column layout for the main section
+	content := commitBoxStyle.Render(m.commitMsg)
+	side := m.renderSideInfo()
+
 	mainCols := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		content,
 		side,
 	)
 
-	// Combine everything vertically
 	ui := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
@@ -348,21 +346,15 @@ func (m Model) viewShowCommit() string {
 		mainCols,
 		footer,
 	)
-
 	return ui
 }
 
-// viewGenerating shows a spinner while the AI is generating a commit message.
 func (m Model) viewGenerating() string {
 	header := renderLogo()
 	topBar := m.renderTopBar()
-
-	body := fmt.Sprintf(
-		"Generating commit message...\n\n%s",
-		m.spinner.View(),
-	)
-
+	body := fmt.Sprintf("Generating commit message...\n\n%s", m.spinner.View())
 	footer := m.renderFooter()
+
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
@@ -372,11 +364,9 @@ func (m Model) viewGenerating() string {
 	)
 }
 
-// viewCommitting shows the spinner while Git commit is in progress.
 func (m Model) viewCommitting() string {
 	header := renderLogo()
 	topBar := m.renderTopBar()
-
 	body := fmt.Sprintf("Committing...\n\n%s", m.spinner.View())
 	footer := m.renderFooter()
 
@@ -389,7 +379,6 @@ func (m Model) viewCommitting() string {
 	)
 }
 
-// viewResult shows the final commit result message and auto-quits after a delay.
 func (m Model) viewResult() string {
 	header := renderLogo()
 	body := lipgloss.NewStyle().Margin(1, 2).Render(m.result)
@@ -401,7 +390,6 @@ func (m Model) viewResult() string {
 	)
 }
 
-// viewSelectType shows a list of commit types to select from.
 func (m Model) viewSelectType() string {
 	header := renderLogo()
 	topBar := m.renderTopBar()
@@ -429,7 +417,6 @@ func (m Model) viewSelectType() string {
 	)
 }
 
-// viewEditing shows the textarea for editing commit message or prompt.
 func (m Model) viewEditing(title string) string {
 	header := renderLogo()
 	topBar := m.renderTopBar()
@@ -441,20 +428,17 @@ func (m Model) viewEditing(title string) string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, topBar, body)
 }
 
-// --- HELPER RENDER FUNCTIONS ---
+// --- Helpers ---
 
-// renderLogo returns the ASCII art logo at the top of the screen.
 func renderLogo() string {
 	return logoStyle.Render(logoText)
 }
 
-// renderTopBar displays a small status bar with commit type, regen left, etc.
 func (m Model) renderTopBar() string {
 	status := fmt.Sprintf("Type: %s | Regens: %d/%d", m.commitType, m.regenCount, m.maxRegens)
 	return topBarStyle.Render(status)
 }
 
-// renderSideInfo shows a side box with instructions or summary info.
 func (m Model) renderSideInfo() string {
 	info := []string{
 		highlightStyle.Render("Commit Type: ") + m.commitType,
@@ -464,13 +448,10 @@ func (m Model) renderSideInfo() string {
 	return sideBoxStyle.Render(strings.Join(info, "\n\n"))
 }
 
-// renderFooter shows the help text at the bottom.
 func (m Model) renderFooter() string {
 	helpText := "Press 'y' to commit, 'r' to regenerate, 'e' to edit, 't' to change type, 'p' to add prompt text, 'q' to quit."
 	return footerStyle.Render(helpText)
 }
-
-// --- COMMANDS ---
 
 // commitCmd triggers the Git commit operation with a given commit message.
 func commitCmd(commitMsg string) tea.Cmd {
@@ -490,8 +471,8 @@ func regenCmd(client ai.AIClient, prompt, commitType, tmpl string, enableEmoji b
 	}
 }
 
-// regenerate calls the AI client to generate a new commit message, then sanitizes and
-// applies any template or emoji rules.
+// regenerate calls the AI client to generate a new commit message, then sanitizes
+// and applies any template or emoji rules.
 func regenerate(prompt string, client ai.AIClient, commitType, tmpl string, enableEmoji bool) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -504,16 +485,22 @@ func regenerate(prompt string, client ai.AIClient, commitType, tmpl string, enab
 	}
 	log.Debug().Msg("Received response from AI client")
 
+	// Sanitize the AI output
 	result = ai.SanitizeResponse(result, commitType)
+
+	// Possibly add an emoji if requested
 	if enableEmoji {
 		result = git.AddGitmoji(result, commitType)
 	}
+
+	// Apply template if user specified one
 	if tmpl != "" {
 		result, err = template.ApplyTemplate(tmpl, result)
 		if err != nil {
 			return "", err
 		}
 	}
+
 	return result, nil
 }
 
@@ -522,4 +509,38 @@ func autoQuitCmd() tea.Cmd {
 	return tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
 		return autoQuitMsg{}
 	})
+}
+
+// guessCommitTypeFromMessage tries to detect a commit type from the message
+// if the user hasn't specified one.
+//
+// CHANGED: "feat" is checked before "fix" so that if the text has both
+// "feat" and "fix", "feat" wins out.
+func guessCommitTypeFromMessage(msg string) string {
+	lower := strings.ToLower(msg)
+
+	// Put "feat" above "fix" so it's matched first if both strings appear
+	switch {
+	case strings.Contains(lower, "feat"), strings.Contains(lower, "add"),
+		strings.Contains(lower, "create"), strings.Contains(lower, "introduce"):
+		return "feat"
+	case strings.Contains(lower, "fix"):
+		return "fix"
+	case strings.Contains(lower, "doc"):
+		return "docs"
+	case strings.Contains(lower, "refactor"):
+		return "refactor"
+	case strings.Contains(lower, "test"):
+		return "test"
+	case strings.Contains(lower, "perf"):
+		return "perf"
+	case strings.Contains(lower, "build"):
+		return "build"
+	case strings.Contains(lower, "ci"):
+		return "ci"
+	case strings.Contains(lower, "chore"):
+		return "chore"
+	default:
+		return ""
+	}
 }
