@@ -33,4 +33,20 @@ commitType: "feat"
 template: ""
 
 # A default prompt seed. Typically built automatically from the staged diff, but you can add extra text here.
-prompt: ""
+promptTemplate: "" # Customize the AI prompt template here
+
+commitTypes: # Customize accepted commit types for your project
+  - "feat"
+  - "fix"
+  - "docs"
+  - "style"
+  - "refactor"
+  - "test"
+  - "chore"
+  - "perf"
+  - "build"
+  - "ci"
+lockFiles: # Specify lock files to filter from diff
+  - "go.mod"
+  - "go.sum"
+
