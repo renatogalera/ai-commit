@@ -376,7 +376,6 @@ func generateCommitMessage(
 	return strings.TrimSpace(msg), nil
 }
 
-// enforceCommitMessageStyle returns a string of suggestions or "No issues found" if OK
 func enforceCommitMessageStyle(
 	ctx context.Context,
 	client ai.AIClient,
