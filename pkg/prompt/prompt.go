@@ -42,8 +42,24 @@ Diff:
 {DIFF}
 `
 
-// BuildCommitPrompt ...
-func BuildCommitPrompt(diff, language, commitType, additionalText, promptTemplate string) string {
+// DefaultCommitStyleReviewPromptTemplate template for commit message style review prompts
+const DefaultCommitStyleReviewPromptTemplate = `Review the following commit message for clarity, informativeness, and adherence to best practices. Provide feedback in bullet points if the message is lacking in any way. Focus on these aspects:
+
+- **Clarity**: Is the message clear and easy to understand? Would someone unfamiliar with the changes easily grasp the intent?
+- **Informativeness**: Does the message provide sufficient context about *what* and *why* the change is being made? Does it go beyond just *how* the code was changed?
+- **Diff Reflection**: Does the commit message accurately and adequately reflect the changes present in the Git diff? Is it more than just a superficial description?
+- **Semantic Feedback**: If the message is vague or superficial, provide specific, actionable feedback to improve it (e.g., "This message is too vague; specify *why* this change is necessary", "Explain the impact of this change on the user").
+
+If the commit message is well-written and meets these criteria, respond with the phrase: "No issues found."
+
+Commit Message to Review:
+{COMMIT_MESSAGE}
+
+Language for feedback MUST be {LANGUAGE}.
+`
+
+// BuildCommitPrompt builds the prompt for commit message generation.
+func BuildCommitPrompt(diff string, language string, commitType string, additionalText string, promptTemplate string) string {
 	var sb strings.Builder
 
 	finalTemplate := promptTemplate
@@ -70,8 +86,8 @@ func BuildCommitPrompt(diff, language, commitType, additionalText, promptTemplat
 	return sb.String()
 }
 
-// BuildCodeReviewPrompt ...
-func BuildCodeReviewPrompt(diff, language string, promptTemplate string) string {
+// BuildCodeReviewPrompt builds the prompt for code review.
+func BuildCodeReviewPrompt(diff string, language string, promptTemplate string) string {
 	var sb strings.Builder
 
 	finalTemplate := promptTemplate
@@ -81,6 +97,22 @@ func BuildCodeReviewPrompt(diff, language string, promptTemplate string) string 
 
 	promptText := strings.ReplaceAll(finalTemplate, "{LANGUAGE}", language)
 	promptText = strings.ReplaceAll(promptText, "{DIFF}", diff)
+
+	sb.WriteString(promptText)
+	return sb.String()
+}
+
+// BuildCommitStyleReviewPrompt builds the prompt for commit message style review.
+func BuildCommitStyleReviewPrompt(commitMsg string, language string, promptTemplate string) string {
+	var sb strings.Builder
+
+	finalTemplate := promptTemplate
+	if finalTemplate == "" {
+		finalTemplate = DefaultCommitStyleReviewPromptTemplate
+	}
+
+	promptText := strings.ReplaceAll(finalTemplate, "{LANGUAGE}", language)
+	promptText = strings.ReplaceAll(promptText, "{COMMIT_MESSAGE}", commitMsg)
 
 	sb.WriteString(promptText)
 	return sb.String()
