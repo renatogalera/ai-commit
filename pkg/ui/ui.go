@@ -15,7 +15,6 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/git"
 	"github.com/renatogalera/ai-commit/pkg/prompt"
-	"github.com/renatogalera/ai-commit/pkg/provider/openai"
 	"github.com/renatogalera/ai-commit/pkg/template"
 )
 
@@ -286,7 +285,7 @@ func regenerate(prompt string, client ai.AIClient, commitType string, tmpl strin
 	if err != nil {
 		return "", err
 	}
-	result = openai.SanitizeOpenAIResponse(result, commitType)
+	result = ai.SanitizeResponse(result, commitType)
 	if enableEmoji {
 		result = git.AddGitmoji(result, commitType)
 	}
