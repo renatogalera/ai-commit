@@ -10,7 +10,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	gogpt "github.com/sashabaranov/go-openai"
 
 	"github.com/renatogalera/ai-commit/pkg/ai"
 	"github.com/renatogalera/ai-commit/pkg/committypes"
@@ -202,8 +201,7 @@ func initAIClient(ctx context.Context, cfg *config.Config, provider, apiKey, mod
 		if model == "" {
 			model = cfg.OpenAIModel
 		}
-		client := gogpt.NewClient(key)
-		return openai.NewOpenAIClient(client, model), nil
+		return openai.NewOpenAIClient(key, model), nil
 
 	case "gemini":
 		key, err := config.ResolveAPIKey(geminiKey, "GEMINI_API_KEY", cfg.GeminiAPIKey, "gemini")
