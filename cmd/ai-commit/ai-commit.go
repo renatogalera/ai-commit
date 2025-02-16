@@ -176,6 +176,10 @@ func generateCommitMessage(ctx context.Context, client ai.AIClient, promptText, 
 	if err != nil {
 		return "", err
 	}
+	// Se o commitType não foi fornecido, tenta adivinhar a partir da mensagem gerada
+	if commitType == "" {
+		commitType = committypes.GuessCommitType(msg)
+	}
 	msg = ai.SanitizeResponse(msg, commitType)
 	if enableEmoji {
 		msg = git.AddGitmoji(msg, commitType)

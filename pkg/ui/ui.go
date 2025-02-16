@@ -1,6 +1,3 @@
-// Package ui contains the implementation of the interactive terminal UI (TUI)
-// for AI-Commit. This UI lets users view, edit, regenerate, and confirm the AI-
-// generated commit message before performing the commit.
 package ui
 
 import (
@@ -116,9 +113,9 @@ func NewUIModel(
 	ta.SetHeight(10)
 	ta.ShowLineNumbers = false
 
-	// If user didn't explicitly set commitType, try to guess from the commitMsg itself
+	// Se o commitType não foi definido pelo usuário, tenta adivinhar a partir da mensagem de commit
 	if commitType == "" {
-		guessed := guessCommitTypeFromMessage(commitMsg)
+		guessed := committypes.GuessCommitType(commitMsg)
 		if guessed != "" {
 			commitType = guessed
 		}
@@ -267,9 +264,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Update commit message
 		m.commitMsg = msg.msg
-		// If still no commitType, guess from the newly regenerated message
+		// Se ainda não há commitType, tenta identificar a partir da mensagem gerada
 		if m.commitType == "" {
-			if guessed := guessCommitTypeFromMessage(m.commitMsg); guessed != "" {
+			if guessed := committypes.GuessCommitType(m.commitMsg); guessed != "" {
 				m.commitType = guessed
 			}
 		}
@@ -469,12 +466,12 @@ func regenerate(prompt string, client ai.AIClient, commitType, tmpl string, enab
 	// Sanitize the AI output
 	result = ai.SanitizeResponse(result, commitType)
 
-	// Possibly add an emoji if requested
+	// Possivelmente adiciona emoji, se solicitado
 	if enableEmoji {
 		result = git.AddGitmoji(result, commitType)
 	}
 
-	// Apply template if user specified one
+	// Aplica template se o usuário especificou
 	if tmpl != "" {
 		result, err = template.ApplyTemplate(tmpl, result)
 		if err != nil {
@@ -490,38 +487,4 @@ func autoQuitCmd() tea.Cmd {
 	return tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
 		return autoQuitMsg{}
 	})
-}
-
-// guessCommitTypeFromMessage tries to detect a commit type from the message
-// if the user hasn't specified one.
-//
-// CHANGED: "feat" is checked before "fix" so that if the text has both
-// "feat" and "fix", "feat" wins out.
-func guessCommitTypeFromMessage(msg string) string {
-	lower := strings.ToLower(msg)
-
-	// Put "feat" above "fix" so it's matched first if both strings appear
-	switch {
-	case strings.Contains(lower, "feat"), strings.Contains(lower, "add"),
-		strings.Contains(lower, "create"), strings.Contains(lower, "introduce"):
-		return "feat"
-	case strings.Contains(lower, "fix"):
-		return "fix"
-	case strings.Contains(lower, "doc"):
-		return "docs"
-	case strings.Contains(lower, "refactor"):
-		return "refactor"
-	case strings.Contains(lower, "test"):
-		return "test"
-	case strings.Contains(lower, "perf"):
-		return "perf"
-	case strings.Contains(lower, "build"):
-		return "build"
-	case strings.Contains(lower, "ci"):
-		return "ci"
-	case strings.Contains(lower, "chore"):
-		return "chore"
-	default:
-		return ""
-	}
 }
