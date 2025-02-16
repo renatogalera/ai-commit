@@ -1,6 +1,6 @@
 # AI-Commit
 
-**AI-Commit** is a powerful tool that generates [Conventional Commits](https://www.conventionalcommits.org/) using AI (OpenAI, Google Gemini, Anthropic Claude). *Automatically generate commit messages for Git, saving you time and improving your commit history.*
+**AI-Commit** is a powerful tool that generates [Conventional Commits](https://www.conventionalcommits.org/) using AI (OpenAI, Google Gemini, Anthropic Claude), DeepSeek. *Automatically generate commit messages for Git, saving you time and improving your commit history.*
 
 It supports:
 - **OpenAI**
@@ -44,13 +44,17 @@ A `config.yaml` is auto-created at `~/.config/ai-commit/config.yaml` with defaul
 ```yaml
 provider: "openai"
 openAiApiKey: "sk-YOUR-OPENAI-KEY"
-openaiModel: "gpt-4"
+openaiModel: "chatgpt-4o-latest"
 
 geminiApiKey: "YOUR-GEMINI-KEY"
 geminiModel: "models/gemini-2.0-flash"
 
 anthropicApiKey: "sk-YOUR-ANTHROPIC-KEY"
-anthropicModel: "claude-2"
+anthropicModel: "claude-3-5-sonnet-latest"
+
+deepseekApiKey: "YOUR-DEEPSEEK-KEY"
+deepseekModel: "deepseek-chat"
+
 
 semanticRelease: false
 interactiveSplit: false
@@ -95,7 +99,7 @@ You can also specify API keys via environment variables:
 
 *   `--provider`  
     *Which AI provider to use?*  
-    Valid: `openai`, `gemini`, `anthropic`  
+    Valid: `openai`, `gemini`, `anthropic`, `deepseek`  
     (Default from config.yaml)
 
 *   `--model`  
@@ -104,7 +108,7 @@ You can also specify API keys via environment variables:
 
 *   `--apiKey`  
     *OpenAI key.*  
-    (For Gemini or Anthropic, use `--geminiApiKey` or `--anthropicApiKey`.)
+    (For Gemini or Anthropic or DeepSeek, use `--geminiApiKey` or `--anthropicApiKey` or `--deepseekApiKey`.)
 
 *   `--commit-type fix|feat|docs|refactor|test|perf|build|ci|chore`  
     *Specify commit type if desired (e.g., for automatic commit type detection).*
@@ -145,6 +149,7 @@ You can also specify API keys via environment variables:
     ai-commit --provider=openai --model=gpt-4 --apiKey=sk-OPENAI_KEY
     ai-commit --provider=gemini --model=models/gemini-2.0-flash --geminiApiKey=YOUR_GEMINI_KEY
     ai-commit --provider=anthropic --model=claude-2 --anthropicApiKey=YOUR_ANTHROPIC_KEY
+    ai-commit --provider=deepseek --model=deepseek-chat --deepseekApiKey=YOUR_DEEPSEEK_KEY
     ```
 5.  **Interactive Split**:
     ```bash

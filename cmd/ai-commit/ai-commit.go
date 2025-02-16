@@ -21,6 +21,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/git"
 	"github.com/renatogalera/ai-commit/pkg/prompt"
 	"github.com/renatogalera/ai-commit/pkg/provider/anthropic"
+	"github.com/renatogalera/ai-commit/pkg/provider/deepseek"
 	"github.com/renatogalera/ai-commit/pkg/provider/gemini"
 	"github.com/renatogalera/ai-commit/pkg/provider/openai"
 	"github.com/renatogalera/ai-commit/pkg/template"
@@ -31,14 +32,15 @@ import (
 
 const defaultTimeout = 60 * time.Second
 
-// Providers that we support
+// Add new provider constant near the other provider constants.
 const (
 	providerOpenAI    = "openai"
 	providerGemini    = "gemini"
 	providerAnthropic = "anthropic"
+	providerDeepseek  = "deepseek"
 )
 
-// Config represents both our CLI flags/environment overrides and our config.yaml settings.
+// Update Config struct to include Deepseek-related settings.
 type Config struct {
 	Prompt           string `yaml:"prompt,omitempty"`
 	CommitType       string `yaml:"commitType,omitempty"`
@@ -46,11 +48,11 @@ type Config struct {
 	SemanticRelease  bool   `yaml:"semanticRelease,omitempty"`
 	InteractiveSplit bool   `yaml:"interactiveSplit,omitempty"`
 	EnableEmoji      bool   `yaml:"enableEmoji,omitempty"`
-	Provider         string `yaml:"provider,omitempty"` // e.g. "openai", "gemini", or "anthropic"
+	Provider         string `yaml:"provider,omitempty"`
 
 	// OpenAI-related
 	OpenAIAPIKey string `yaml:"openAiApiKey,omitempty"`
-	OpenAIModel  string `yaml:"openaiModel,omitempty"` // e.g. "gpt-4"
+	OpenAIModel  string `yaml:"openaiModel,omitempty"`
 
 	// Gemini-related
 	GeminiAPIKey string `yaml:"geminiApiKey,omitempty"`
@@ -59,6 +61,10 @@ type Config struct {
 	// Anthropic-related
 	AnthropicAPIKey string `yaml:"anthropicApiKey,omitempty"`
 	AnthropicModel  string `yaml:"anthropicModel,omitempty"`
+
+	// Deepseek-related
+	DeepseekAPIKey string `yaml:"deepseekApiKey,omitempty"`
+	DeepseekModel  string `yaml:"deepseekModel,omitempty"`
 
 	// New commit author configuration
 	AuthorName  string `yaml:"authorName,omitempty"`
@@ -97,13 +103,15 @@ func LoadOrCreateConfig() (*Config, error) {
 			SemanticRelease:  false,
 			InteractiveSplit: false,
 			EnableEmoji:      false,
-			Provider:         providerOpenAI, // default provider
+			Provider:         providerOpenAI,
 			OpenAIAPIKey:     "",
-			OpenAIModel:      gogpt.GPT4, // example default
+			OpenAIModel:      gogpt.GPT4oLatest,
 			GeminiAPIKey:     "",
 			GeminiModel:      "models/gemini-2.0-flash",
 			AnthropicAPIKey:  "",
-			AnthropicModel:   "claude-2",
+			AnthropicModel:   "claude-3-5-sonnet-latest",
+			DeepseekAPIKey:   "",
+			DeepseekModel:    "deepseek-chat",
 			AuthorName:       "ai-commit",
 			AuthorEmail:      "ai-commit@example.com",
 		}
@@ -162,6 +170,7 @@ func initAIClient(
 	modelFlag string,
 	geminiKeyFlag string,
 	anthropicKeyFlag string,
+	deepseekKeyFlag string, // New parameter for Deepseek
 ) (ai.AIClient, error) {
 
 	provider := strings.TrimSpace(providerFlag)
@@ -170,16 +179,16 @@ func initAIClient(
 		provider = cfg.Provider
 	}
 
-	if provider != providerOpenAI && provider != providerGemini && provider != providerAnthropic {
-		return nil, fmt.Errorf("invalid provider specified: %s (must be openai, gemini, or anthropic)", provider)
+	// Validate provider
+	if provider != providerOpenAI && provider != providerGemini && provider != providerAnthropic && provider != providerDeepseek {
+		return nil, fmt.Errorf("invalid provider specified: %s (must be openai, gemini, anthropic, or deepseek)", provider)
 	}
 
-	// Decide final sub-model name based on provider + single `--model`
 	var finalModel string
 
 	switch provider {
 	case providerOpenAI:
-		apiKey, err := loadAPIKey(apiKeyFlag, "OPENAI_API_KEY", cfg.OpenAIAPIKey, "openAI")
+		apiKey, err := loadAPIKey(apiKeyFlag, "OPENAI_API_KEY", cfg.OpenAIAPIKey, "openai")
 		if err != nil {
 			return nil, err
 		}
@@ -222,6 +231,23 @@ func initAIClient(
 			return nil, fmt.Errorf("failed to initialize Anthropic client: %w", err)
 		}
 		return anthroClient, nil
+
+	case providerDeepseek:
+		// New case for Deepseek
+		apiKey, err := loadAPIKey(deepseekKeyFlag, "DEEPSEEK_API_KEY", cfg.DeepseekAPIKey, "deepseek")
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(modelFlag) != "" {
+			finalModel = modelFlag
+		} else {
+			finalModel = cfg.DeepseekModel
+		}
+		deepseekClient, err := deepseek.NewDeepseekClient(apiKey, finalModel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize Deepseek client: %w", err)
+		}
+		return deepseekClient, nil
 	}
 
 	return nil, errors.New("no valid AI provider selected")
@@ -247,6 +273,7 @@ func main() {
 	apiKeyFlag := flag.String("apiKey", "", "API key for the chosen provider (openai). For Gemini or Anthropic see respective flags below.")
 	geminiAPIKeyFlag := flag.String("geminiApiKey", cfgFile.GeminiAPIKey, "Gemini API key (or set GEMINI_API_KEY env)")
 	anthropicAPIKeyFlag := flag.String("anthropicApiKey", cfgFile.AnthropicAPIKey, "Anthropic API key (or set ANTHROPIC_API_KEY env)")
+	deepseekAPIKeyFlag := flag.String("deepseekApiKey", cfgFile.DeepseekAPIKey, "Deepseek API key (or set DEEPSEEK_API_KEY env)")
 
 	languageFlag := flag.String("language", "english", "Language for the commit message")
 	commitTypeFlag := flag.String("commit-type", cfgFile.CommitType, "Commit type (e.g. feat, fix, docs)")
@@ -276,6 +303,7 @@ func main() {
 		*modelFlag,
 		*geminiAPIKeyFlag,
 		*anthropicAPIKeyFlag,
+		*deepseekAPIKeyFlag,
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("Unable to initialize AI client")
