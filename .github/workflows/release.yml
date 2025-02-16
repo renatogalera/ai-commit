@@ -19,18 +19,21 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Check if Token is Set
+      - name: Debug GitHub Token
         run: |
+          echo "GH_TOKEN length: ${#GH_TOKEN}"
           if [ -z "${{ secrets.GH_TOKEN }}" ]; then
-            echo "GH_TOKEN is not set!"
+            echo "ERROR: GH_TOKEN is NOT set!"
             exit 1
           else
-            echo "GH_TOKEN is set."
+            echo "✅ GH_TOKEN is set."
           fi
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
       - name: Install Goreleaser
         run: |
-          curl -sL https://git.io/goreleaser | bash
+          curl -sL https://install.goreleaser.com | bash
 
       - name: Run Goreleaser
         env:

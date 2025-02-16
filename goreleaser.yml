@@ -1,0 +1,37 @@
+version: 2
+
+project_name: "ai-commit"
+
+# Build configuration
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    main: ./cmd/ai-commit
+    ldflags:
+      - "-s -w"
+    binary: ai-commit
+
+# Archive config
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+# Release config
+release:
+  github:
+    owner: renatogalera
+    name: ai-commit
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^chore:'
