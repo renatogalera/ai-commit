@@ -3,6 +3,7 @@
 **AI-Commit** is a powerful CLI tool designed to revolutionize your Git workflow by leveraging AI for three key tasks: generating commit messages, providing basic code reviews, and enforcing commit message style guides. By integrating cutting-edge AI models, AI-Commit helps you create meaningful, Conventional Commits-compliant messages, get quick feedback on your code changes, and ensure your commit messages adhere to a high standard of clarity and informativeness—all right from your terminal.
 
 It supports:
+
 - **OpenAI**
 - **Google Gemini**
 - **Anthropic Claude**
@@ -242,4 +243,5 @@ cd ai-commit
 go build -o ai-commit ./cmd/ai-commit
 sudo mv ai-commit /usr/local/bin/
 ```
+
 ---
