@@ -19,6 +19,15 @@ jobs:
         with:
           go-version: '1.21'
 
+      - name: Check if Token is Set
+        run: |
+          if [ -z "${{ secrets.GH_TOKEN }}" ]; then
+            echo "GH_TOKEN is not set!"
+            exit 1
+          else
+            echo "GH_TOKEN is set."
+          fi
+
       - name: Install Goreleaser
         run: |
           curl -sL https://git.io/goreleaser | bash
@@ -27,4 +36,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: goreleaser release --clean
-
