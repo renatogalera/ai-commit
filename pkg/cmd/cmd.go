@@ -1,19 +1,53 @@
-package main
+package cmd
 
 import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
+	"github.com/ktr0731/go-fuzzyfinder"
 	gogit "github.com/go-git/go-git/v5"
 	gogitobj "github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/ktr0731/go-fuzzyfinder"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 
 	"github.com/renatogalera/ai-commit/pkg/ai"
 	"github.com/renatogalera/ai-commit/pkg/config"
+	"github.com/renatogalera/ai-commit/pkg/git"
+	"github.com/renatogalera/ai-commit/pkg/prompt"
 )
 
+// NewSummarizeCmd creates the "summarize" command.
+// The setupAIEnvironment function is passed from main so that we reuse the existing environment setup.
+func NewSummarizeCmd(setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "summarize",
+		Short: "List commits via fzf, pick one, and summarize the commit with AI",
+		Long: `Displays all commits in a fuzzy finder interface; after selecting a commit,
+AI-Commit fetches that commit's diff and calls the AI provider to produce a summary.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			runSummarizeCommand(cmd, args, setupAIEnvironment)
+		},
+	}
+	return cmd
+}
+
+// runSummarizeCommand sets up the AI environment and calls SummarizeCommits.
+func runSummarizeCommand(cmd *cobra.Command, args []string, setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) {
+	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Setup environment error for summarize command")
+		return
+	}
+	defer cancel()
+
+	if err := SummarizeCommits(ctx, aiClient, cfg); err != nil {
+		log.Fatal().Err(err).Msg("Failed to summarize commits")
+	}
+}
+
+// SummarizeCommits lists all commits, allows the user to select one via fzf,
+// retrieves its diff, builds a prompt, gets the summary from the AI provider, and prints it.
 func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Config) error {
 	repo, err := gogit.PlainOpen(".")
 	if err != nil {
@@ -33,7 +67,8 @@ func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Con
 		func(i int) string {
 			commit := commits[i]
 			shortHash := commit.Hash.String()[:7]
-			return fmt.Sprintf("%s | %s", shortHash, firstLine(commit.Message))
+			// Changed the order so that the commit message comes first
+			return fmt.Sprintf("%s | %s", firstLine(commit.Message), shortHash)
 		},
 		fuzzyfinder.WithPromptString("Select a commit to summarize> "),
 	)
@@ -53,25 +88,25 @@ func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Con
 	}
 
 	commitSummaryPrompt := buildCommitSummaryPrompt(selectedCommit, diffStr, cfg.PromptTemplate)
-
 	summary, err := aiClient.GetCommitMessage(ctx, commitSummaryPrompt)
 	if err != nil {
 		return fmt.Errorf("failed to summarize commit with AI: %w", err)
 	}
 
 	summary = aiClient.SanitizeResponse(summary, "")
-
 	printFormattedSummary(selectedCommit, summary)
 
 	return nil
 }
 
+// printFormattedSummary displays the commit summary with formatted sections.
 func printFormattedSummary(commit *gogitobj.Commit, summary string) {
 	fmt.Println("\n## Commit Summary")
 
 	shortHash := commit.Hash.String()[:7]
 	author := commit.Author.Name
-	date := commit.Author.When.Format(time.RFC1123)
+	// Use a standard date format.
+	date := commit.Author.When.Format("Mon Jan 2 15:04:05 MST 2006")
 
 	fmt.Printf("* **Short Hash:** `%s`\n", shortHash)
 	fmt.Printf("* **Author:** %s\n", author)
@@ -101,6 +136,7 @@ func printFormattedSummary(commit *gogitobj.Commit, summary string) {
 	fmt.Println("---")
 }
 
+// listAllCommits retrieves all commits from the repository.
 func listAllCommits(repo *gogit.Repository) ([]*gogitobj.Commit, error) {
 	headRef, err := repo.Head()
 	if err != nil {
@@ -125,6 +161,7 @@ func listAllCommits(repo *gogit.Repository) ([]*gogitobj.Commit, error) {
 	return commits, nil
 }
 
+// getCommitDiff obtains the diff for the specified commit.
 func getCommitDiff(repo *gogit.Repository, commit *gogitobj.Commit) (string, error) {
 	if commit.NumParents() == 0 {
 		tree, err := commit.Tree()
@@ -144,6 +181,8 @@ func getCommitDiff(repo *gogit.Repository, commit *gogitobj.Commit) (string, err
 	}
 	return patch.String(), nil
 }
+
+// getDiffAgainstEmpty handles the diff for the initial commit.
 func getDiffAgainstEmpty(commitTree *gogitobj.Tree) (string, error) {
 	emptyTree := &gogitobj.Tree{}
 	patch, err := emptyTree.Patch(commitTree)
@@ -153,6 +192,7 @@ func getDiffAgainstEmpty(commitTree *gogitobj.Tree) (string, error) {
 	return patch.String(), nil
 }
 
+// buildCommitSummaryPrompt constructs the prompt used to ask the AI for a summary.
 func buildCommitSummaryPrompt(commit *gogitobj.Commit, diffStr, customPromptTemplate string) string {
 	defaultTemplate := `Summarize the following git commit in markdown format.
 Use "## " for section titles. Include:
@@ -181,14 +221,16 @@ Diff:
 	}
 
 	promptText := strings.ReplaceAll(templateUsed, "{AUTHOR}", commit.Author.Name)
-	promptText = strings.ReplaceAll(promptText, "{DATE}", commit.Author.When.Format(time.RFC1123))
+	promptText = strings.ReplaceAll(promptText, "{DATE}", commit.Author.When.Format("Mon Jan 2 15:04:05 MST 2006"))
 	promptText = strings.ReplaceAll(promptText, "{COMMIT_MSG}", commit.Message)
 	promptText = strings.ReplaceAll(promptText, "{DIFF}", diffStr)
 
 	return promptText
 }
 
+// firstLine returns the first line of a given string.
 func firstLine(msg string) string {
 	lines := strings.Split(msg, "\n")
 	return strings.TrimSpace(lines[0])
 }
+

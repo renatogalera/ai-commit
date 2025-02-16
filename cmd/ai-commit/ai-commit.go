@@ -11,9 +11,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	"github.com/renatogalera/ai-commit/cmd"
 	"github.com/renatogalera/ai-commit/pkg/ai"
 	"github.com/renatogalera/ai-commit/pkg/committypes"
-	config "github.com/renatogalera/ai-commit/pkg/config"
+	"github.com/renatogalera/ai-commit/pkg/config"
 	"github.com/renatogalera/ai-commit/pkg/git"
 	"github.com/renatogalera/ai-commit/pkg/prompt"
 	"github.com/renatogalera/ai-commit/pkg/provider/anthropic"
@@ -69,16 +70,8 @@ var reviewCmd = &cobra.Command{
 	Run:   runAICodeReview,
 }
 
-var summarizeCmd = &cobra.Command{
-	Use:   "summarize",
-	Short: "List commits via fzf, pick one, and summarize the commit with AI",
-	Long: `Displays all commits in a fuzzy finder interface; after selecting a commit,
-AI-Commit fetches that commit's diff and calls the AI provider to produce a summary.`,
-	Run: runSummarizeCommand,
-}
-
 func init() {
-
+	// Define flags
 	rootCmd.Flags().StringVar(&apiKeyFlag, "apiKey", "", "API key for OpenAI provider (or env OPENAI_API_KEY)")
 	rootCmd.Flags().StringVar(&geminiAPIKeyFlag, "geminiApiKey", "", "API key for Gemini provider (or env GEMINI_API_KEY)")
 	rootCmd.Flags().StringVar(&anthropicAPIKeyFlag, "anthropicApiKey", "", "API key for Anthropic provider (or env ANTHROPIC_API_KEY)")
@@ -95,7 +88,9 @@ func init() {
 	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, gemini, anthropic, deepseek")
 	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Sub-model for the chosen provider")
 	rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
-	rootCmd.AddCommand(summarizeCmd)
+
+	// Register the new summarize command from the cmd package.
+	rootCmd.AddCommand(cmd.NewSummarizeCmd(setupAIEnvironment))
 	rootCmd.AddCommand(reviewCmd)
 }
 
@@ -115,27 +110,27 @@ func runAICommit(cmd *cobra.Command, args []string) {
 	}
 	defer cancel()
 
-	// If user wants to run the interactive chunk-split
+	// If interactive commit splitting is enabled, run it.
 	if interactiveSplitFlag {
 		runInteractiveSplit(ctx, aiClient, semanticReleaseFlag, manualSemverFlag)
 		return
 	}
 
-	// Get the Git diff
+	// Get the Git diff.
 	diff, err := git.GetGitDiff(ctx)
 	if err != nil {
 		log.Fatal().Err(err).Msg(errMsgGetDiff)
 		return
 	}
 
-	// Filter out lock files as configured
+	// Filter out lock files as configured.
 	diff = git.FilterLockFiles(diff, cfg.LockFiles)
 	if strings.TrimSpace(diff) == "" {
 		fmt.Println("No staged changes after filtering lock files.")
 		return
 	}
 
-	// 1) Generate commit message via AI
+	// Generate commit message via AI.
 	promptText := prompt.BuildCommitPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate)
 	commitMsg, genErr := generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, emojiFlag)
 	if genErr != nil {
@@ -143,7 +138,7 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// 2) If user wants style review, do it now - *before* TUI or forced commit
+	// If commit style review is enabled.
 	var styleReviewSuggestions string
 	if reviewMessageFlag {
 		suggestions, errReview := enforceCommitMessageStyle(ctx, aiClient, commitMsg, languageFlag, cfg.PromptTemplate)
@@ -154,16 +149,13 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		styleReviewSuggestions = suggestions
 	}
 
-	// 3) Check if user wants to skip TUI (force) and commit
+	// If force commit is enabled.
 	if forceFlag {
-		// Print style suggestions if any
 		if reviewMessageFlag && strings.TrimSpace(styleReviewSuggestions) != "" &&
 			!strings.Contains(strings.ToLower(styleReviewSuggestions), "no issues found") {
 			fmt.Println("\nAI Commit Message Style Review Suggestions:")
 			fmt.Println(styleReviewSuggestions)
 		}
-
-		// Ensure the commit message is not empty
 		if strings.TrimSpace(commitMsg) == "" {
 			log.Fatal().Msg("Generated commit message is empty; aborting commit.")
 		}
@@ -171,8 +163,6 @@ func runAICommit(cmd *cobra.Command, args []string) {
 			log.Fatal().Err(err).Msg("Commit failed")
 		}
 		fmt.Println("Commit created successfully (forced).")
-
-		// Handle semantic release if needed
 		if semanticReleaseFlag {
 			if err := versioner.PerformSemanticRelease(ctx, aiClient, commitMsg, manualSemverFlag); err != nil {
 				log.Fatal().Err(err).Msg("Semantic release failed")
@@ -181,11 +171,10 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// 4) Launch TUI, passing style review suggestions so user can see/fix them
+	// Launch the interactive UI.
 	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, aiClient)
 }
 
-// runAICodeReview simply shows code review suggestions for the staged changes
 func runAICodeReview(cmd *cobra.Command, args []string) {
 	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
 	if err != nil {
@@ -199,7 +188,6 @@ func runAICodeReview(cmd *cobra.Command, args []string) {
 		log.Fatal().Err(err).Msg("Git diff error")
 		return
 	}
-
 	if strings.TrimSpace(diff) == "" {
 		fmt.Println("No staged changes for code review.")
 		return
@@ -216,24 +204,9 @@ func runAICodeReview(cmd *cobra.Command, args []string) {
 	fmt.Println(strings.TrimSpace(reviewResult))
 }
 
-// setupLogger configures Zerolog's console writer for pretty logging
 func setupLogger() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-}
-
-// runSummarizeCommand is just a stub referencing the code in summarize_cmd.go
-func runSummarizeCommand(cmd *cobra.Command, args []string) {
-	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Setup environment error for summarize command")
-		return
-	}
-	defer cancel()
-
-	if err := SummarizeCommits(ctx, aiClient, cfg); err != nil {
-		log.Fatal().Err(err).Msg("Failed to summarize commits")
-	}
 }
 
 // This is your existing function that configures everything
