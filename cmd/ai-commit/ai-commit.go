@@ -152,7 +152,7 @@ func main() {
 	// Launch interactive UI for commit editing
 	uiModel := ui.NewUIModel(commitMsg, diff, *languageFlag, promptText, *commitTypeFlag, *templateFlag, *emojiFlag, aiClient)
 	program := ui.NewProgram(uiModel)
-	if err := program.Start(); err != nil {
+	if _, err := program.Run(); err != nil {
 		log.Error().Err(err).Msg("UI encountered an error")
 		os.Exit(1)
 	}
