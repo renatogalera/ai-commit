@@ -1,3 +1,4 @@
+// Package cmd provides additional CLI commands for ai-commit.
 package cmd
 
 import (
@@ -6,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dustin/go-humanize"
 	gogit "github.com/go-git/go-git/v5"
 	gogitobj "github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/ktr0731/go-fuzzyfinder"
@@ -24,7 +26,9 @@ func NewSummarizeCmd(setupAIEnvironment func() (context.Context, context.CancelF
 		Short: "List commits via fzf, pick one, and summarize the commit with AI",
 		Long: `Displays all commits in a fuzzy finder interface; after selecting a commit,
 AI-Commit fetches that commit's diff and calls the AI provider to produce a summary.
-The resulting output is rendered with a beautiful TUI-like style.`,
+The header output mimics:
+    git log --color=always --format='%C(auto)%h%d %s %C(black)%C(bold)%cr'
+`,
 		Run: func(cmd *cobra.Command, args []string) {
 			runSummarizeCommand(cmd, args, setupAIEnvironment)
 		},
@@ -61,17 +65,19 @@ func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Con
 	if len(commits) == 0 {
 		return fmt.Errorf("no commits found in this repository")
 	}
-
 	idx, err := fuzzyfinder.Find(
 		commits,
 		func(i int) string {
 			commit := commits[i]
 			shortHash := commit.Hash.String()[:7]
-			// Display the commit message first, then the short hash.
-			return fmt.Sprintf("%s | %s", firstLine(commit.Message), shortHash)
+			// Use humanize.Time to get a relative time string.
+			relativeTime := humanize.Time(commit.Author.When)
+			// Return commit ID first, then commit message, then the humanized date.
+			return fmt.Sprintf("%s | %s | %s", shortHash, firstLine(commit.Message), relativeTime)
 		},
 		fuzzyfinder.WithPromptString("Select a commit to summarize> "),
 	)
+
 	if err != nil {
 		return fmt.Errorf("fuzzyfinder error: %w", err)
 	}
@@ -98,40 +104,42 @@ func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Con
 	return nil
 }
 
-// printFormattedSummary renders the commit summary with beautiful TUI styling using lipgloss.
+// printFormattedSummary renders the commit summary with a header
+// similar to git log --color=always --format='%C(auto)%h%d %s %C(black)%C(bold)%cr'
+// and uses lipgloss for styling.
 func printFormattedSummary(commit *gogitobj.Commit, summary string) {
-	// Define styles
-	headerStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("63")).
-		Underline(true).
-		MarginBottom(1)
+	// Styles for the header
+	hashStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
+	subjectStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226"))
+	timeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Bold(true)
 
-	infoStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")).
-		PaddingLeft(2)
+	// Retrieve commit components.
+	commitShort := commit.Hash.String()[:7]
+	subject := firstLine(commit.Message)
+	// Use humanize to get a relative time string (e.g., "2 days ago").
+	relativeTime := humanize.Time(commit.Author.When)
 
+	// Create the header line mimicking the git log format.
+	headerLine := fmt.Sprintf("%s %s %s",
+		hashStyle.Render(commitShort),
+		subjectStyle.Render(subject),
+		timeStyle.Render(relativeTime),
+	)
+	fmt.Println(headerLine)
+	fmt.Println()
+
+	// Now print the detailed summary sections.
+	// Define styles for section titles and content.
 	sectionTitleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("212")).
 		Underline(true).
 		MarginTop(1)
-
 	sectionContentStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).
 		PaddingLeft(2)
-
 	separatorStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240"))
-
-	// Header
-	fmt.Println(headerStyle.Render("Commit Summary"))
-	info := fmt.Sprintf("Short Hash: %s\nAuthor: %s\nDate: %s",
-		commit.Hash.String()[:7],
-		commit.Author.Name,
-		commit.Author.When.Format("Mon Jan 2 15:04:05 MST 2006"))
-	fmt.Println(infoStyle.Render(info))
-	fmt.Println()
 
 	// Process summary sections. We expect sections separated by "###"
 	sections := strings.Split(summary, "###")
