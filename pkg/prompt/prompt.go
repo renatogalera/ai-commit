@@ -8,23 +8,20 @@ import (
 )
 
 // DefaultPromptTemplate is used if no template is configured
-const DefaultPromptTemplate = `Generate a git commit message following these rules:
-- Use Conventional Commits format (e.g., 'feat: add new feature X', 'fix(login): handle edge case').
-- Keep the subject line concise (ideally under 50 characters), in the imperative mood.
-- If breaking changes exist, add 'BREAKING CHANGE:' in the body.
-- After the subject line, add a blank line, then bullet points describing changes with '- '.
+const DefaultPromptTemplate = `Generate a git commit message following these guidelines:
+- Use the Conventional Commits format (e.g., 'feat: add new feature X', 'fix(login): handle edge case').
+- Keep the subject line concise (under 50 characters) and in the imperative mood.
+- If there are breaking changes, include 'BREAKING CHANGE:' in the commit body.
+- After the subject line, add a blank line, then list changes with bullet points (using "- ").
 - Omit disclaimers, code blocks, or references to AI.
 - Use the present tense and ensure clarity.
-- Output only the commit message.
-- Do NOT include the commit hash or branch name.
-- Think first, if information is not useful to humans, it is not necessary.
-- When editing the README, ignore the diff and just let us know that it has been updated.
-- Do not repeat topics.
-- Do NOT begin your commit message with the word 'git' or references to it.
+- Output only the commit message (do not include the commit hash or branch name).
+- For README edits, simply state that the README has been updated.
+- Avoid unnecessary repetition; express each idea only once.
 {COMMIT_TYPE_HINT}
 - Write the message in {LANGUAGE}.
-Here is the diff:
 
+Diff:
 {DIFF}
 {ADDITIONAL_CONTEXT}
 `
