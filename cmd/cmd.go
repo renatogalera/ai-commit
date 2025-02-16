@@ -25,10 +25,7 @@ func NewSummarizeCmd(setupAIEnvironment func() (context.Context, context.CancelF
 		Use:   "summarize",
 		Short: "List commits via fzf, pick one, and summarize the commit with AI",
 		Long: `Displays all commits in a fuzzy finder interface; after selecting a commit,
-AI-Commit fetches that commit's diff and calls the AI provider to produce a summary.
-The header output mimics:
-    git log --color=always --format='%C(auto)%h%d %s %C(black)%C(bold)%cr'
-`,
+AI-Commit fetches that commit's diff and calls the AI provider to produce a summary.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			runSummarizeCommand(cmd, args, setupAIEnvironment)
 		},
