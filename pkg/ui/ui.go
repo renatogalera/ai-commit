@@ -188,7 +188,7 @@ func NewUIModel(
 		aiClient:      client,
 		spinner:       s,
 		selectedIndex: 0,
-		commitTypes:   committypes.AllTypes(),
+		commitTypes:   committypes.GetAllTypes(),
 		regenCount:    0,
 		maxRegens:     3,
 		textarea:      ta,
