@@ -12,6 +12,8 @@ import (
 const DefaultPromptTemplate = `Generate a git commit message that is clear, concise, and follows the Conventional Commits format:
 - Use the format "type: subject" (e.g., "fix: correct error handling").
 - Keep the subject line under 50 characters and in the imperative mood.
+- Just send a title line that starts with the commit type, then just a description of the changes.
+- Remember, the commit is for another human to understand what has been changed, ignore unnecessary changes like line breaks, details about changed README and changes in code comments.
 - If there are breaking changes, include "BREAKING CHANGE:" in the body.
 - After the subject line, leave a blank line and then list key changes with bullet points.
 - Do not include extraneous details such as commit hash, branch name, spacing details, or formatting guidelines.
