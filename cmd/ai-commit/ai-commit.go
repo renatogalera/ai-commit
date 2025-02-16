@@ -355,7 +355,7 @@ func main() {
 	}
 
 	// Possibly truncate the diff for large changes
-	diff, _ = openai.MaybeSummarizeDiff(diff, 5000)
+	diff, _ = ai.MaybeSummarizeDiff(diff, 5000)
 
 	// Build final prompt
 	promptText := prompt.BuildPrompt(diff, *languageFlag, *commitTypeFlag, "")
@@ -429,7 +429,7 @@ func generateCommitMessage(
 		return "", err
 	}
 	// Clean up
-	res = openai.SanitizeOpenAIResponse(res, commitType)
+	res = ai.SanitizeResponse(res, commitType)
 
 	// Optionally add Gitmoji
 	if enableEmoji {
