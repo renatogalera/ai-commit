@@ -48,7 +48,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "ai-commit",
 	Short: "AI-Commit: Generate Git commit messages with AI",
-	Long: `AI-Commit is a CLI tool that generates commit messages using AI providers like OpenAI, Gemini, and Anthropic.
+	Long: `AI-Commit is a CLI tool that generates commit messages using AI providers like OpenAI, Gemini, Anthropic, and Deepseek.
 It helps you write better commit messages following the Conventional Commits standard.`,
 	Run: runAiCommit,
 }
