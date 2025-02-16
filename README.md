@@ -7,6 +7,7 @@ It supports:
 - **Google Gemini**
 - **Anthropic Claude**
 - **DeepSeek**
+- **Phind** (current model is free)
 
 Boost your commit quality, enforce standards, and save valuable time with AI-Commit, your all-in-one AI assistant for Git workflows.
 
@@ -16,7 +17,7 @@ Boost your commit quality, enforce standards, and save valuable time with AI-Com
 
 ## ✨ Key Features
 
-- **AI-Powered Commit Messages**: Automatically generate insightful and Conventional Commits-compliant messages using top AI providers (OpenAI, Gemini, Anthropic, DeepSeek).
+- **AI-Powered Commit Messages**: Automatically generate insightful and Conventional Commits-compliant messages using top AI providers (OpenAI, Gemini, Anthropic, DeepSeek, and now Phind).
 - **AI Code Reviewer (Subcommand)**: Get basic, AI-driven code reviews directly in your terminal. Identify potential style issues, refactoring opportunities, and basic security concerns before committing. Use the `ai-commit review` subcommand to analyze your staged changes.
 - **AI Commit Message Style Guide Enforcer (`--review-message`)**: Automatically review and enforce your commit message style using AI. Get feedback on clarity, informativeness, and overall quality to ensure consistently excellent commit messages. Enable with the `--review-message` flag during commit message generation.
 - **Interactive TUI**: Refine commit messages in an enhanced, user-friendly Text User Interface. Regenerate messages, change commit types, edit prompts, view the full diff, and now also benefit from AI-driven style review feedback—all within the TUI.
@@ -25,7 +26,7 @@ Boost your commit quality, enforce standards, and save valuable time with AI-Com
 - **Interactive Commit Splitting (`--interactive-split`)**: Gain granular control over your commits with chunk-based staging and commit message generation for partial commits.
 - **Emoji Support (`--emoji`)**: Add a touch of visual flair to your commit history with automatically included emojis based on commit types.
 - **Customizable Templates (`--template`)**: Tailor commit messages to your team's style with custom templates, incorporating dynamic values like branch names.
-- **Multi-Provider AI Support**: Choose the best AI for each task by switching seamlessly between OpenAI, Gemini, Anthropic, and DeepSeek.
+- **Multi-Provider AI Support**: Choose the best AI for each task by switching seamlessly between OpenAI, Gemini, Anthropic, DeepSeek, and Phind.
 - **Configurable and Filterable**: Adapt AI-Commit to your projects with customizable commit types and prompt templates. Filter lock file diffs for cleaner, AI-focused message generation and reviews.
 - **Diff View in TUI**: Inspect complete Git diffs within the TUI (`l` key) for thorough pre-commit reviews.
 - **Enhanced Splitter UI**: Benefit from improved interactive splitting with chunk selection inversion and clear status updates.
@@ -62,6 +63,9 @@ anthropicModel: "claude-3-5-sonnet-latest"
 deepseekApiKey: "YOUR-DEEPSEEK-KEY"
 deepseekModel: "deepseek-chat"
 
+phindApiKey: ""             # Phind does not require an API key by default
+phindModel: "Phind-70B"      # Current Phind model is free
+
 semanticRelease: false
 interactiveSplit: false
 enableEmoji: false
@@ -82,7 +86,6 @@ commitTypes: # Define your project's accepted commit types
 lockFiles: # Specify lock files to be ignored in diffs for commit messages and reviews
   - "go.mod"
   - "go.sum"
-
 ```
 
 > **Note**: Command-line flags always take precedence over configuration file values. API keys can be set via environment variables or within `config.yaml`. You can now also customize the `promptTemplate` in this file to adjust the behavior of both commit message generation and code reviews.
@@ -93,6 +96,7 @@ API Keys via Environment Variables:
 - `GEMINI_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `DEEPSEEK_API_KEY`
+- `PHIND_API_KEY`
 
 ---
 
@@ -107,7 +111,7 @@ API Keys via Environment Variables:
     ```bash
     ai-commit [--review-message]
     ```
-    Launches the interactive TUI (or non-interactive commit if `--force` is used). Use `--review-message` flag to enable AI-based style review of the commit message.
+    Launches the interactive TUI (or non-interactive commit if `--force` is used). Use the `--review-message` flag to enable AI-based style review of the commit message.
 
 3.  **Run AI-Commit for Code Review**:
     ```bash
@@ -133,9 +137,9 @@ API Keys via Environment Variables:
 
 **Main Flags**:
 
-*   `--provider`: AI provider selection (`openai`, `gemini`, `anthropic`, `deepseek`).
-*   `--model`: Specific model choice per provider (e.g., `gpt-4`, `models/gemini-2.0-flash`).
-*   `--apiKey`, `--geminiApiKey`, `--anthropicApiKey`, `--deepseekApiKey`: API keys for each provider.
+*   `--provider`: AI provider selection (`openai`, `gemini`, `anthropic`, `deepseek`, `phind`).
+*   `--model`: Specific model choice per provider (e.g., `gpt-4`, `models/gemini-2.0-flash`, `claude-3-5-sonnet-latest`, `deepseek-chat`, `Phind-70B`).
+*   `--apiKey`, `--geminiApiKey`, `--anthropicApiKey`, `--deepseekApiKey`, `--phindApiKey`: API keys for each provider.
 *   `--commit-type`: Force a commit type (e.g., `fix`, `feat`) for non-interactive use or AI guidance.
 *   `--template`: Custom template for commit messages, wrapping AI output.
 *   `--prompt` *(Deprecated)*: Use `promptTemplate` in `config.yaml` for persistent prompt customization instead.
@@ -147,7 +151,7 @@ API Keys via Environment Variables:
 *   `--manual-semver`: With `--semantic-release`, manually select version type in TUI.
 *   `--interactive-split`: Launches chunk-based commit splitting TUI.
 *   `--emoji`: Adds emojis to commit messages based on type.
-*    `--review-message`:  Enable AI-powered commit message style review. After generating a commit message, AI-Commit sends it to AI for a style review. Feedback is provided in the terminal output, ensuring commit messages are clear, informative, and adhere to best practices.
+*   `--review-message`: Enable AI-powered commit message style review. After generating a commit message, AI-Commit sends it to AI for a style review. Feedback is provided in the terminal output, ensuring commit messages are clear, informative, and adhere to best practices.
 
 **Subcommand**:
 
@@ -159,7 +163,6 @@ API Keys via Environment Variables:
      ```bash
      ai-commit summarize
      ```
-
 
 ---
 
@@ -181,7 +184,7 @@ API Keys via Environment Variables:
     ```bash
     ai-commit
     ```
-     Standard interactive commit message generation, without style review.
+    Standard interactive commit message generation, without style review.
 
 4.  **AI-Powered Code Review**:
     ```bash
@@ -201,6 +204,7 @@ API Keys via Environment Variables:
     ai-commit --provider=gemini --model=models/gemini-2.0-flash --geminiApiKey=...
     ai-commit --provider=anthropic --model=claude-3-sonnet --anthropicApiKey=...
     ai-commit --provider=deepseek --model=deepseek-chat --deepseekApiKey=...
+    ai-commit --provider=phind --model=Phind-70B           # Phind model is currently free; API key is optional
     ```
 
 7.  **Interactive Split Commit**:
