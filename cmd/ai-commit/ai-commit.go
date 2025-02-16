@@ -106,64 +106,77 @@ func runAICommit(cmd *cobra.Command, args []string) {
 	}
 	defer cancel()
 
+	// If user wants to run the interactive chunk-split
 	if interactiveSplitFlag {
 		runInteractiveSplit(ctx, aiClient, semanticReleaseFlag, manualSemverFlag)
 		return
 	}
 
+	// Get the Git diff
 	diff, err := git.GetGitDiff(ctx)
 	if err != nil {
 		log.Fatal().Err(err).Msg(errMsgGetDiff)
 		return
 	}
 
+	// Filter out lock files as configured
 	diff = git.FilterLockFiles(diff, cfg.LockFiles)
 	if strings.TrimSpace(diff) == "" {
 		fmt.Println("No staged changes after filtering lock files.")
 		return
 	}
 
+	// 1) Generate commit message via AI
 	promptText := prompt.BuildCommitPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate)
 	commitMsg, genErr := generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, emojiFlag)
 	if genErr != nil {
 		log.Error().Err(genErr).Msg("Commit message generation error")
-		os.Exit(1) // Exit directly when message generation fails in non-interactive mode
+		os.Exit(1)
 	}
 
+	// 2) If user wants style review, do it now - *before* TUI or forced commit
+	var styleReviewSuggestions string
 	if reviewMessageFlag {
-		commitMsg, err = enforceCommitMessageStyle(ctx, aiClient, commitMsg, languageFlag, cfg.PromptTemplate)
-		if err != nil {
-			log.Error().Err(err).Msg("Commit message style enforcement failed")
+		suggestions, errReview := enforceCommitMessageStyle(ctx, aiClient, commitMsg, languageFlag, cfg.PromptTemplate)
+		if errReview != nil {
+			log.Error().Err(errReview).Msg("Commit message style enforcement failed")
 			os.Exit(1)
 		}
-		fmt.Println("\nAI-Reviewed Commit Message:")
-		fmt.Println(commitMsg)
+		styleReviewSuggestions = suggestions
 	}
 
+	// 3) Check if user wants to skip TUI (force) and commit
 	if forceFlag {
-		handleForceCommit(ctx, commitMsg, aiClient)
+		// Print style suggestions if any
+		if reviewMessageFlag && strings.TrimSpace(styleReviewSuggestions) != "" &&
+			!strings.Contains(strings.ToLower(styleReviewSuggestions), "no issues found") {
+			fmt.Println("\nAI Commit Message Style Review Suggestions:")
+			fmt.Println(styleReviewSuggestions)
+		}
+
+		// Ensure the commit message is not empty
+		if strings.TrimSpace(commitMsg) == "" {
+			log.Fatal().Msg("Generated commit message is empty; aborting commit.")
+		}
+		if err := git.CommitChanges(ctx, commitMsg); err != nil {
+			log.Fatal().Err(err).Msg("Commit failed")
+		}
+		fmt.Println("Commit created successfully (forced).")
+
+		// Handle semantic release if needed
+		if semanticReleaseFlag {
+			if err := versioner.PerformSemanticRelease(ctx, aiClient, commitMsg, manualSemverFlag); err != nil {
+				log.Fatal().Err(err).Msg("Semantic release failed")
+			}
+		}
 		return
 	}
 
-	runInteractiveUI(ctx, commitMsg, diff, promptText, aiClient)
+	// 4) Launch TUI, passing style review suggestions so user can see/fix them
+	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, aiClient)
 }
 
-func enforceCommitMessageStyle(ctx context.Context, client ai.AIClient, commitMsg string, language string, promptTemplate string) (string, error) {
-	reviewPrompt := prompt.BuildCommitStyleReviewPrompt(commitMsg, language, promptTemplate)
-	styleReviewResult, err := client.GetCommitMessage(ctx, reviewPrompt)
-	if err != nil {
-		return commitMsg, fmt.Errorf("commit message style review failed: %w", err)
-	}
-
-	if !strings.Contains(strings.ToLower(styleReviewResult), "no issues found") {
-		fmt.Println("\nAI Commit Message Style Review Suggestions:")
-		fmt.Println(strings.TrimSpace(styleReviewResult))
-	} else {
-		fmt.Println("\nAI Commit Message Style Review: No issues found. 👍")
-	}
-	return commitMsg, nil
-}
-
+// runAICodeReview simply shows code review suggestions for the staged changes
 func runAICodeReview(cmd *cobra.Command, args []string) {
 	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
 	if err != nil {
@@ -194,11 +207,13 @@ func runAICodeReview(cmd *cobra.Command, args []string) {
 	fmt.Println(strings.TrimSpace(reviewResult))
 }
 
+// setupLogger configures Zerolog's console writer for pretty logging
 func setupLogger() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 }
 
+// setupAIEnvironment loads config, validates flags, initializes AI client, checks Git repo
 func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error) {
 	cfg, err := config.LoadOrCreateConfig()
 	if err != nil {
@@ -229,6 +244,7 @@ func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, 
 	return ctx, cancel, cfgCopy, aiClient, nil
 }
 
+// validateFlagsAndConfig merges CLI flags into the config struct and validates the result
 func validateFlagsAndConfig(cfg *config.Config) (*config.Config, error) {
 	cfgCopy := *cfg
 
@@ -264,6 +280,7 @@ func isValidProvider(provider string) bool {
 	return validProviders[provider]
 }
 
+// initAIClient picks and configures the correct AI client based on config and CLI flags
 func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) {
 	switch cfg.Provider {
 	case "openai":
@@ -326,6 +343,7 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 	return nil, fmt.Errorf("invalid provider specified: %s", cfg.Provider)
 }
 
+// generateCommitMessage calls the AI client and applies commit type + template
 func generateCommitMessage(
 	ctx context.Context,
 	client ai.AIClient,
@@ -334,6 +352,7 @@ func generateCommitMessage(
 	tmpl string,
 	enableEmoji bool,
 ) (string, error) {
+
 	msg, err := client.GetCommitMessage(ctx, promptText)
 	if err != nil {
 		return "", err
@@ -357,6 +376,23 @@ func generateCommitMessage(
 	return strings.TrimSpace(msg), nil
 }
 
+// enforceCommitMessageStyle returns a string of suggestions or "No issues found" if OK
+func enforceCommitMessageStyle(
+	ctx context.Context,
+	client ai.AIClient,
+	commitMsg string,
+	language string,
+	promptTemplate string,
+) (string, error) {
+	reviewPrompt := prompt.BuildCommitStyleReviewPrompt(commitMsg, language, promptTemplate)
+	styleReviewResult, err := client.GetCommitMessage(ctx, reviewPrompt)
+	if err != nil {
+		return "", fmt.Errorf("commit message style review failed: %w", err)
+	}
+	return strings.TrimSpace(styleReviewResult), nil
+}
+
+// handle non-interactive commit flow
 func handleForceCommit(ctx context.Context, commitMsg string, aiClient ai.AIClient) {
 	if strings.TrimSpace(commitMsg) == "" {
 		log.Fatal().Msg("Generated commit message is empty; aborting commit.")
@@ -374,11 +410,13 @@ func handleForceCommit(ctx context.Context, commitMsg string, aiClient ai.AIClie
 	}
 }
 
+// runInteractiveUI starts the TUI flow, passing style review suggestions for display
 func runInteractiveUI(
 	ctx context.Context,
 	commitMsg string,
 	diff string,
 	promptText string,
+	styleReviewSuggestions string,
 	aiClient ai.AIClient,
 ) {
 	uiModel := ui.NewUIModel(
@@ -388,6 +426,7 @@ func runInteractiveUI(
 		promptText,
 		commitTypeFlag,
 		templateFlag,
+		styleReviewSuggestions,
 		emojiFlag,
 		aiClient,
 	)
@@ -408,6 +447,7 @@ func runInteractiveUI(
 	}
 }
 
+// runInteractiveSplit handles chunk-based commit splitting
 func runInteractiveSplit(
 	ctx context.Context,
 	aiClient ai.AIClient,

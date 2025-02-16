@@ -21,6 +21,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/template"
 )
 
+// uiState represents the different states of the TUI.
 type uiState int
 
 const (
@@ -73,7 +74,7 @@ var (
 			Foreground(lipgloss.Color("240"))
 )
 
-// --- Keybindings ---
+// keys holds the key bindings.
 type keys struct {
 	Commit     key.Binding
 	Regenerate key.Binding
@@ -125,6 +126,7 @@ var keyMap = keys{
 	),
 }
 
+// Model is the TUI model.
 type Model struct {
 	state       uiState
 	commitMsg   string
@@ -146,29 +148,15 @@ type Model struct {
 
 	textarea textarea.Model
 	help     help.Model
+
+	// NEW: store style review text (from --review-message)
+	styleReview string
 }
 
-func (m Model) GetCommitMsg() string {
-	return m.commitMsg
-}
-
-func (m Model) GetAIClient() ai.AIClient {
-	return m.aiClient
-}
-
-func (m Model) ShortHelp() []key.Binding {
-	return []key.Binding{keyMap.Help, keyMap.Quit, keyMap.Commit, keyMap.Regenerate} // Basic bindings
-}
-
-func (m Model) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{keyMap.Commit, keyMap.Regenerate, keyMap.Edit, keyMap.TypeSelect, keyMap.PromptEdit, keyMap.ViewDiff}, // More actions
-		{keyMap.Help, keyMap.Quit},
-	}
-}
-
+// NewUIModel creates a new TUI model.
 func NewUIModel(
 	commitMsg, diff, language, promptText, commitType, tmpl string,
+	styleReviewSuggestions string, // new param for style review
 	enableEmoji bool,
 	client ai.AIClient,
 ) Model {
@@ -183,8 +171,7 @@ func NewUIModel(
 	ta.ShowLineNumbers = false
 
 	if commitType == "" {
-		guessed := committypes.GuessCommitType(commitMsg)
-		if guessed != "" {
+		if guessed := committypes.GuessCommitType(commitMsg); guessed != "" {
 			commitType = guessed
 		}
 	}
@@ -206,21 +193,27 @@ func NewUIModel(
 		maxRegens:     3,
 		textarea:      ta,
 		help:          help.New(),
+
+		styleReview: styleReviewSuggestions, // store the style review suggestions
 	}
 }
 
+// NewProgram creates a new Bubble Tea program with the given model.
 func NewProgram(m Model) *tea.Program {
 	return tea.NewProgram(m, tea.WithAltScreen())
 }
 
+// Init is the Bubble Tea initialization command.
 func (m Model) Init() tea.Cmd {
 	return nil
 }
 
+// Update handles incoming messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+
 	case tea.KeyMsg:
 		if key.Matches(msg, keyMap.Quit) {
 			return m, tea.Quit
@@ -285,6 +278,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinner = spinner.New()
 				m.spinner.Spinner = spinner.Dot
 				m.regenCount++
+				// Rebuild the prompt with the newly selected commit type
 				m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, "", "")
 				return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 			}
@@ -293,14 +287,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var tcmd tea.Cmd
 			m.textarea, tcmd = m.textarea.Update(msg)
 			cmd = tcmd
-			if key.Matches(msg, keyMap.Quit) {
-				m.state = stateShowCommit
-				return m, cmd
-			}
-			if msg.String() == "ctrl+s" {
+			switch msg.String() {
+			case "ctrl+s":
 				m.commitMsg = m.textarea.Value()
 				m.state = stateShowCommit
-				return m, cmd
+			case "esc":
+				m.state = stateShowCommit
 			}
 			return m, cmd
 
@@ -308,11 +300,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var tcmd tea.Cmd
 			m.textarea, tcmd = m.textarea.Update(msg)
 			cmd = tcmd
-			if key.Matches(msg, keyMap.Quit) {
-				m.state = stateShowCommit
-				return m, cmd
-			}
-			if msg.String() == "ctrl+s" {
+			switch msg.String() {
+			case "ctrl+s":
 				userPrompt := m.textarea.Value()
 				m.state = stateGenerating
 				m.spinner = spinner.New()
@@ -320,6 +309,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.regenCount++
 				m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, userPrompt, "")
 				return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
+			case "esc":
+				m.state = stateShowCommit
 			}
 			return m, cmd
 
@@ -358,20 +349,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case autoQuitMsg:
 		return m, tea.Quit
 
-	case spinner.TickMsg:
-		if m.state == stateGenerating || m.state == stateCommitting {
-			m.spinner, cmd = m.spinner.Update(msg)
-			return m, cmd
-		}
-
 	case viewDiffMsg:
 		m.state = stateShowDiff
 		return m, nil
 
+	case spinner.TickMsg:
+		// Keep spinner going while in generating or committing
+		if m.state == stateGenerating || m.state == stateCommitting {
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
 	}
 	return m, cmd
 }
 
+// View renders the TUI based on current state.
 func (m Model) View() string {
 	switch m.state {
 	case stateShowCommit:
@@ -389,7 +381,7 @@ func (m Model) View() string {
 	case stateEditingPrompt:
 		return m.viewEditing("Editing prompt text (Ctrl+S to apply, ESC to cancel):")
 	case stateShowDiff:
-		return m.viewDiff() // Render diff view
+		return m.viewDiff()
 	default:
 		return "Unknown state."
 	}
@@ -398,7 +390,7 @@ func (m Model) View() string {
 func (m Model) viewShowCommit() string {
 	header := renderLogo()
 	footer := m.renderFooter()
-	helpView := m.help.View(m) // Help view
+	helpView := m.help.View(m) // m now implements help.KeyMap
 
 	content := commitBoxStyle.Render(m.commitMsg)
 	side := m.renderSideInfo()
@@ -409,10 +401,30 @@ func (m Model) viewShowCommit() string {
 		side,
 	)
 
+	// Show style feedback if not "no issues found"
+	var styleReviewSection string
+	if trimmed := strings.TrimSpace(m.styleReview); trimmed != "" &&
+		!strings.Contains(strings.ToLower(trimmed), "no issues found") {
+		styleReviewSection = lipgloss.NewStyle().
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("204")).
+			Padding(1, 2).
+			Margin(1, 1).
+			Render("Style Review Suggestions:\n\n" + trimmed)
+	}
+
 	ui := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		mainCols,
+	)
+	if styleReviewSection != "" {
+		ui = lipgloss.JoinVertical(lipgloss.Left, ui, styleReviewSection)
+	}
+
+	ui = lipgloss.JoinVertical(
+		lipgloss.Left,
+		ui,
 		footer,
 		helpView,
 	)
@@ -464,7 +476,6 @@ func (m Model) viewResult() string {
 
 func (m Model) viewSelectType() string {
 	header := renderLogo()
-
 	var b strings.Builder
 	b.WriteString("Select commit type:\n\n")
 	for i, ct := range m.commitTypes {
@@ -474,9 +485,8 @@ func (m Model) viewSelectType() string {
 		}
 		b.WriteString(fmt.Sprintf("%s %s\n", cursor, ct))
 	}
-
 	footer := lipgloss.NewStyle().Margin(1, 0).Render(
-		"Use ↑/↓ (or j/k) to navigate, Enter to select, ESC/q to cancel.\n",
+		"Use ↑/↓ (or j/k) to navigate, enter to select, ESC/q to cancel.\n",
 	)
 	helpView := m.help.View(m)
 
@@ -491,7 +501,6 @@ func (m Model) viewSelectType() string {
 
 func (m Model) viewEditing(title string) string {
 	header := renderLogo()
-
 	body := lipgloss.NewStyle().Margin(1, 2).Render(
 		fmt.Sprintf("%s\n\n%s", title, m.textarea.View()),
 	)
@@ -512,6 +521,8 @@ func (m Model) viewDiff() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, helpView)
 }
 
+// Additional rendering functions
+
 func renderLogo() string {
 	return logoStyle.Render(logoText)
 }
@@ -528,6 +539,8 @@ func (m Model) renderSideInfo() string {
 func (m Model) renderFooter() string {
 	return ""
 }
+
+// Commands
 
 func commitCmd(commitMsg string) tea.Cmd {
 	return func() tea.Msg {
@@ -558,11 +571,9 @@ func regenerate(prompt string, client ai.AIClient, commitType, tmpl string, enab
 	log.Debug().Msg("Received response from AI client")
 
 	result = client.SanitizeResponse(result, commitType)
-
 	if commitType != "" {
 		result = git.PrependCommitType(result, commitType, enableEmoji)
 	}
-
 	if tmpl != "" {
 		result, err = template.ApplyTemplate(tmpl, result)
 		if err != nil {
@@ -570,7 +581,7 @@ func regenerate(prompt string, client ai.AIClient, commitType, tmpl string, enab
 		}
 	}
 
-	return result, nil
+	return strings.TrimSpace(result), nil
 }
 
 func autoQuitCmd() tea.Cmd {
@@ -583,4 +594,41 @@ func viewDiffCmd(diff string) tea.Cmd {
 	return func() tea.Msg {
 		return viewDiffMsg{}
 	}
+}
+
+// -------------------------------------------------------------------------------------
+// Added methods to implement help.KeyMap interface for the Model.
+// These methods allow m.help.View(m) to work correctly.
+// -------------------------------------------------------------------------------------
+
+// ShortHelp returns a flat list of key bindings for short help.
+func (m Model) ShortHelp() []key.Binding {
+	return []key.Binding{
+		keyMap.Commit,
+		keyMap.Regenerate,
+		keyMap.Edit,
+		keyMap.TypeSelect,
+		keyMap.PromptEdit,
+		keyMap.ViewDiff,
+		keyMap.Help,
+		keyMap.Quit,
+		keyMap.Enter,
+	}
+}
+
+// FullHelp returns a two-dimensional slice of key bindings for full help.
+func (m Model) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		m.ShortHelp(),
+	}
+}
+
+// GetAIClient returns the AI client stored in the UI model.
+func (m Model) GetAIClient() ai.AIClient {
+	return m.aiClient
+}
+
+// GetCommitMsg returns the commit message stored in the UI model.
+func (m Model) GetCommitMsg() string {
+	return m.commitMsg
 }
