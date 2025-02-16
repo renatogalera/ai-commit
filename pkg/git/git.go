@@ -1,11 +1,11 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http" // Import net/http for DetectContentType
 	"regexp"
 	"strings"
 	"time"
@@ -79,7 +79,7 @@ func GetGitDiff(ctx context.Context) (string, error) {
 		var newContent string
 		if fileStatus.Staging != git.Deleted {
 			newContentBytes, err := ioutil.ReadFile(newPath)
-			if err == nil && !isBinary(newContentBytes) {
+			if err == nil && !isBinary(newContentBytes) { // Use better binary check with net/http
 				newContent = string(newContentBytes)
 			}
 		}
@@ -114,7 +114,7 @@ func getDiffAgainstEmpty(repo *git.Repository) (string, error) {
 		var newContent string
 		if fileStatus.Staging != git.Deleted {
 			data, err := ioutil.ReadFile(filePath)
-			if err == nil && !isBinary(data) {
+			if err == nil && !isBinary(data) { // Use better binary check with net/http
 				newContent = string(data)
 			}
 		}
@@ -130,9 +130,16 @@ func getDiffAgainstEmpty(repo *git.Repository) (string, error) {
 	return diffResult.String(), nil
 }
 
-// isBinary checks if the data is binary.
+// isBinary checks if the data is likely binary using net/http.DetectContentType.
 func isBinary(data []byte) bool {
-	return bytes.IndexByte(data, 0) != -1
+	contentType := http.DetectContentType(data)
+	return strings.HasPrefix(contentType, "image/") ||
+		strings.HasPrefix(contentType, "video/") ||
+		strings.HasPrefix(contentType, "audio/") ||
+		contentType == "application/octet-stream" ||
+		contentType == "application/pdf" || // Add common binary types if needed
+		contentType == "application/zip" ||
+		strings.Contains(contentType, "font")
 }
 
 // AddGitmoji adds an emoji based on commit type.
@@ -187,6 +194,22 @@ func AddGitmoji(message, commitType string) string {
 	return fmt.Sprintf("%s: %s", prefix, message)
 }
 
+// PrependCommitType ensures the commit type prefix is added to the message.
+// If withEmoji is true, it uses AddGitmoji; otherwise, it simply prepends the type.
+func PrependCommitType(message, commitType string, withEmoji bool) string {
+	if commitType == "" {
+		return message
+	}
+	// Remove any existing commit type prefix.
+	regex := committypes.BuildRegexPatternWithEmoji()
+	message = regex.ReplaceAllString(message, "")
+	message = strings.TrimSpace(message)
+	if withEmoji {
+		return AddGitmoji(message, commitType)
+	}
+	return fmt.Sprintf("%s: %s", commitType, message)
+}
+
 // GetHeadCommitMessage returns the HEAD commit message.
 func GetHeadCommitMessage(ctx context.Context) (string, error) {
 	repo, err := git.PlainOpen(".")
@@ -219,6 +242,9 @@ func GetCurrentBranch(ctx context.Context) (string, error) {
 
 // FilterLockFiles filters out diffs for specified lock files.
 func FilterLockFiles(diff string, lockFiles []string) string {
+	if len(lockFiles) == 0 {
+		return diff // Return original diff if no lock files specified.
+	}
 	lines := strings.Split(diff, "\n")
 	var filtered []string
 	isLockFile := false

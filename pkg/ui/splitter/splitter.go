@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss" // Lipgloss for styling
 
 	"github.com/renatogalera/ai-commit/pkg/ai"
 	"github.com/renatogalera/ai-commit/pkg/git"
@@ -23,23 +24,35 @@ const (
 	stateCommitted
 )
 
+// --- Lipgloss Styles for Splitter ---
+var (
+	selectedChunkStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("212")) // Highlight color for selected chunks
+
+	unselectedChunkStyle = lipgloss.NewStyle() // Default style for unselected chunks
+)
+
 // Model for interactive splitting.
 type Model struct {
-	state        splitterState
-	chunks       []git.DiffChunk
-	selected     map[int]bool
-	aiClient     ai.AIClient
-	commitResult string
+	state         splitterState
+	chunks        []git.DiffChunk
+	selected      map[int]bool
+	aiClient      ai.AIClient
+	commitResult  string
+	totalChunks   int // Total chunks count for status
+	selectedCount int // Count of selected chunks for status
 }
 
 // NewSplitterModel creates a new splitter model.
 func NewSplitterModel(chunks []git.DiffChunk, client ai.AIClient) Model {
 	return Model{
-		state:        stateList,
-		chunks:       chunks,
-		selected:     make(map[int]bool),
-		aiClient:     client,
-		commitResult: "",
+		state:         stateList,
+		chunks:        chunks,
+		selected:      make(map[int]bool),
+		aiClient:      client,
+		commitResult:  "",
+		totalChunks:   len(chunks), // Initialize total chunks
+		selectedCount: 0,           // Initialize selected count to 0
 	}
 }
 
@@ -63,12 +76,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			for i := range m.chunks {
 				m.selected[i] = !m.selected[i]
 			}
+			m.updateSelectedCount() // Update selected count
 		case "c":
 			return m.updateCommit()
 		case "a":
 			for i := range m.chunks {
 				m.selected[i] = true
 			}
+			m.updateSelectedCount() // Update count
+		case "i": // Invert selection
+			for i := range m.chunks {
+				m.selected[i] = !m.selected[i]
+			}
+			m.updateSelectedCount() // Update count
 		}
 	}
 	return m, nil
@@ -77,22 +97,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	switch m.state {
 	case stateList:
-		var b strings.Builder
-		b.WriteString("Select chunks to commit (space to toggle, 'c' to commit, 'a' to select all, 'q' to quit):\n\n")
-		for i, chunk := range m.chunks {
-			marker := " "
-			if m.selected[i] {
-				marker = "x"
-			}
-			b.WriteString(fmt.Sprintf("[%s] %s\n", marker, chunk.FilePath))
-		}
-		return b.String()
+		return m.listView()
 	case stateSpinner:
 		return "Committing selected chunks..."
 	case stateCommitted:
 		return m.commitResult + "\nPress 'q' to exit."
 	}
 	return ""
+}
+
+func (m Model) listView() string {
+	var b strings.Builder
+	b.WriteString("Select chunks to commit (space to toggle, 'c' to commit, 'a' to select all, 'i' to invert selection, 'q' to quit):\n\n")
+	for i, chunk := range m.chunks {
+		marker := " "
+		style := unselectedChunkStyle // Default unselected style
+		if m.selected[i] {
+			marker = "x"
+			style = selectedChunkStyle // Apply selected style if chunk is selected
+		}
+		b.WriteString(fmt.Sprintf("[%s] %s\n", marker, style.Render(chunk.FilePath))) // Apply style to file path
+	}
+	footer := fmt.Sprintf("\nSelected chunks: %d/%d", m.selectedCount, m.totalChunks) // Show status footer
+	b.WriteString(footer)
+
+	return b.String()
 }
 
 func (m Model) updateCommit() (tea.Model, tea.Cmd) {
@@ -107,6 +136,17 @@ func (m Model) updateCommit() (tea.Model, tea.Cmd) {
 		m.state = stateCommitted
 		return nil
 	}
+}
+
+// updateSelectedCount recalculates and updates the count of selected chunks in the model.
+func (m *Model) updateSelectedCount() {
+	count := 0
+	for _, isSelected := range m.selected {
+		if isSelected {
+			count++
+		}
+	}
+	m.selectedCount = count
 }
 
 func partialCommit(chunks []git.DiffChunk, selected map[int]bool, client ai.AIClient) error {

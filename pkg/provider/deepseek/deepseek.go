@@ -12,8 +12,9 @@ import (
 
 // DeepseekClient implements the ai.AIClient interface using the OpenAI SDK.
 type DeepseekClient struct {
-	client *gogpt.Client
-	model  string
+	ai.BaseAIClient // Embed BaseAIClient
+	client          *gogpt.Client
+	model           string
 }
 
 func NewDeepseekClient(apiKey, model string) (*DeepseekClient, error) {
@@ -29,8 +30,9 @@ func NewDeepseekClient(apiKey, model string) (*DeepseekClient, error) {
 	client := gogpt.NewClientWithConfig(config)
 
 	return &DeepseekClient{
-		client: client,
-		model:  model,
+		BaseAIClient: ai.BaseAIClient{Provider: "deepseek"}, // Initialize BaseAIClient
+		client:       client,
+		model:        model,
 	}, nil
 }
 
@@ -53,6 +55,18 @@ func (d *DeepseekClient) GetCommitMessage(ctx context.Context, prompt string) (s
 		return "", errors.New("no response from Deepseek")
 	}
 	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
+}
+
+// SanitizeResponse for Deepseek provider, if needed. Override default.
+func (d *DeepseekClient) SanitizeResponse(message, commitType string) string {
+	// Add Deepseek-specific sanitization logic here, if different from the default.
+	return d.BaseAIClient.SanitizeResponse(message, commitType) // Fallback to default
+}
+
+// MaybeSummarizeDiff for Deepseek if specific behavior is required. Override default.
+func (d *DeepseekClient) MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
+	// Deepseek-specific summarization logic
+	return d.BaseAIClient.MaybeSummarizeDiff(diff, maxLength) // Fallback to default
 }
 
 var _ ai.AIClient = (*DeepseekClient)(nil)

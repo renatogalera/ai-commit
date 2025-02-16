@@ -12,8 +12,9 @@ import (
 
 // AnthropicClient implements the ai.AIClient interface using the Anthropic Claude API.
 type AnthropicClient struct {
-	client *anthropicSDK.Client
-	model  string
+	ai.BaseAIClient // Embed BaseAIClient
+	client          *anthropicSDK.Client
+	model           string
 }
 
 // NewAnthropicClient creates a new AnthropicClient with the provided API key and model.
@@ -27,8 +28,9 @@ func NewAnthropicClient(apiKey, model string) (*AnthropicClient, error) {
 		return nil, errors.New("failed to create Anthropic client")
 	}
 	return &AnthropicClient{
-		client: client,
-		model:  model,
+		BaseAIClient: ai.BaseAIClient{Provider: "anthropic"}, // Initialize BaseAIClient
+		client:       client,
+		model:        model,
 	}, nil
 }
 
@@ -54,6 +56,18 @@ func (ac *AnthropicClient) GetCommitMessage(ctx context.Context, prompt string) 
 		return "", errors.New("empty response from Anthropic")
 	}
 	return msg, nil
+}
+
+// SanitizeResponse for Anthropic. Override default if needed.
+func (ac *AnthropicClient) SanitizeResponse(message, commitType string) string {
+	// Anthropic specific sanitization if necessary
+	return ac.BaseAIClient.SanitizeResponse(message, commitType) // Fallback to default
+}
+
+// MaybeSummarizeDiff for Anthropic, override if custom behavior required
+func (ac *AnthropicClient) MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
+	// Anthropic specific summarization
+	return ac.BaseAIClient.MaybeSummarizeDiff(diff, maxLength) // Fallback
 }
 
 var _ ai.AIClient = (*AnthropicClient)(nil)

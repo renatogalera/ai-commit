@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,6 +32,7 @@ const (
 	stateSelectType
 	stateEditing
 	stateEditingPrompt
+	stateShowDiff // New state to show full diff
 )
 
 type (
@@ -39,6 +42,7 @@ type (
 		err error
 	}
 	autoQuitMsg struct{}
+	viewDiffMsg struct{} // Message to trigger view diff command
 )
 
 // --- Lipgloss Styles ---
@@ -72,7 +76,62 @@ var (
 	highlightStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("212")).
 			Bold(true)
+
+	diffStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")) // Muted color for diff
 )
+
+// --- Keybindings ---
+type keys struct {
+	Commit     key.Binding
+	Regenerate key.Binding
+	Edit       key.Binding
+	TypeSelect key.Binding
+	PromptEdit key.Binding
+	Quit       key.Binding
+	ViewDiff   key.Binding // Key to view full diff
+	Help       key.Binding
+	Enter      key.Binding
+}
+
+var keyMap = keys{
+	Commit: key.NewBinding(
+		key.WithKeys("y"),
+		key.WithHelp("y", "commit"),
+	),
+	Regenerate: key.NewBinding(
+		key.WithKeys("r"),
+		key.WithHelp("r", "regenerate"),
+	),
+	Edit: key.NewBinding(
+		key.WithKeys("e"),
+		key.WithHelp("e", "edit message"),
+	),
+	TypeSelect: key.NewBinding(
+		key.WithKeys("t"),
+		key.WithHelp("t", "change type"),
+	),
+	PromptEdit: key.NewBinding(
+		key.WithKeys("p"),
+		key.WithHelp("p", "edit prompt"),
+	),
+	ViewDiff: key.NewBinding( // Binding for viewing full diff
+		key.WithKeys("l"),
+		key.WithHelp("l", "view diff"),
+	),
+	Quit: key.NewBinding(
+		key.WithKeys("q", "ctrl+c", "esc"),
+		key.WithHelp("q", "quit"),
+	),
+	Help: key.NewBinding(
+		key.WithKeys("?"),
+		key.WithHelp("?", "help"),
+	),
+	Enter: key.NewBinding(
+		key.WithKeys("enter"), // Add enter as alias for commit/yes
+		key.WithHelp("enter", "commit"),
+	),
+}
 
 // Model holds the complete state of the TUI.
 type Model struct {
@@ -95,6 +154,28 @@ type Model struct {
 	maxRegens  int
 
 	textarea textarea.Model
+	help     help.Model
+}
+
+func (m Model) GetCommitMsg() string {
+	return m.commitMsg
+}
+
+func (m Model) GetAIClient() ai.AIClient {
+	return m.aiClient
+}
+
+// ShortHelp returns keybindings to pass to help.ShortHelp. It's part of the help.KeyMap interface.
+func (m Model) ShortHelp() []key.Binding {
+	return []key.Binding{keyMap.Help, keyMap.Quit, keyMap.Commit, keyMap.Regenerate} // Basic bindings
+}
+
+// FullHelp returns keybindings for the expanded help view. It's part of the help.KeyMap interface.
+func (m Model) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{keyMap.Commit, keyMap.Regenerate, keyMap.Edit, keyMap.TypeSelect, keyMap.PromptEdit, keyMap.ViewDiff}, // More actions
+		{keyMap.Help, keyMap.Quit},
+	}
 }
 
 // NewUIModel constructs and returns a new Model with the given parameters.
@@ -113,7 +194,6 @@ func NewUIModel(
 	ta.SetHeight(10)
 	ta.ShowLineNumbers = false
 
-	// Se o commitType não foi definido pelo usuário, tenta adivinhar a partir da mensagem de commit
 	if commitType == "" {
 		guessed := committypes.GuessCommitType(commitMsg)
 		if guessed != "" {
@@ -137,6 +217,7 @@ func NewUIModel(
 		regenCount:    0,
 		maxRegens:     3,
 		textarea:      ta,
+		help:          help.New(),
 	}
 }
 
@@ -157,14 +238,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Global quit
+		if key.Matches(msg, keyMap.Quit) {
+			return m, tea.Quit
+		}
+		// Help toggling always available
+		if key.Matches(msg, keyMap.Help) {
+			m.help.ShowAll = !m.help.ShowAll
+			return m, nil // Only update help state, no command
+		}
+
 		switch m.state {
 		case stateShowCommit:
-			switch msg.String() {
-			case "y", "enter":
+			if key.Matches(msg, keyMap.Commit, keyMap.Enter) { // Both "y" and "enter"
 				m.state = stateCommitting
 				return m, commitCmd(m.commitMsg)
-
-			case "r":
+			}
+			if key.Matches(msg, keyMap.Regenerate) {
 				if m.regenCount >= m.maxRegens {
 					m.result = fmt.Sprintf("Maximum regenerations (%d) reached.", m.maxRegens)
 					m.state = stateResult
@@ -175,33 +265,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinner.Spinner = spinner.Dot
 				m.regenCount++
 				return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
-
-			case "q", "ctrl+c":
-				return m, tea.Quit
-
-			case "t":
+			}
+			if key.Matches(msg, keyMap.TypeSelect) {
 				m.state = stateSelectType
 				return m, nil
-
-			case "e":
+			}
+			if key.Matches(msg, keyMap.Edit) {
 				m.state = stateEditing
 				m.textarea.SetValue(m.commitMsg)
 				m.textarea.Focus()
 				return m, nil
-
-			case "p":
+			}
+			if key.Matches(msg, keyMap.PromptEdit) {
 				m.state = stateEditingPrompt
 				m.textarea.SetValue("")
 				m.textarea.Focus()
 				return m, nil
 			}
+			if key.Matches(msg, keyMap.ViewDiff) {
+				m.state = stateShowDiff       // Switch to show diff state
+				return m, viewDiffCmd(m.diff) // Dispatch command to view diff
+			}
 
 		case stateSelectType:
 			switch msg.String() {
-			case "q", "esc", "ctrl+c":
-				m.state = stateShowCommit
-				return m, nil
-
 			case "up", "k":
 				if m.selectedIndex > 0 {
 					m.selectedIndex--
@@ -216,7 +303,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinner = spinner.New()
 				m.spinner.Spinner = spinner.Dot
 				m.regenCount++
-				m.prompt = prompt.BuildPrompt(m.diff, m.language, m.commitType, "")
+				m.prompt = prompt.BuildPrompt(m.diff, m.language, m.commitType, "", "") // Use empty string for promptTemplate
 				return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 			}
 
@@ -224,11 +311,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var tcmd tea.Cmd
 			m.textarea, tcmd = m.textarea.Update(msg)
 			cmd = tcmd
-			switch msg.String() {
-			case "esc":
+			if key.Matches(msg, keyMap.Quit) { // Use keymap for consistent quit handling
 				m.state = stateShowCommit
 				return m, cmd
-			case "ctrl+s":
+			}
+			if msg.String() == "ctrl+s" {
 				m.commitMsg = m.textarea.Value()
 				m.state = stateShowCommit
 				return m, cmd
@@ -239,20 +326,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var tcmd tea.Cmd
 			m.textarea, tcmd = m.textarea.Update(msg)
 			cmd = tcmd
-			switch msg.String() {
-			case "esc":
+			if key.Matches(msg, keyMap.Quit) { // Keymap for quit in prompt edit
 				m.state = stateShowCommit
 				return m, cmd
-			case "ctrl+s":
+			}
+			if msg.String() == "ctrl+s" {
 				userPrompt := m.textarea.Value()
 				m.state = stateGenerating
 				m.spinner = spinner.New()
 				m.spinner.Spinner = spinner.Dot
 				m.regenCount++
-				m.prompt = prompt.BuildPrompt(m.diff, m.language, m.commitType, userPrompt)
+				m.prompt = prompt.BuildPrompt(m.diff, m.language, m.commitType, userPrompt, "") // Empty template for prompt edit
 				return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 			}
 			return m, cmd
+
+		case stateShowDiff:
+			if key.Matches(msg, keyMap.Quit) { // Quit from diff view too
+				m.state = stateShowCommit // Go back to commit review
+				return m, nil             // No command, just state change
+			}
 		}
 
 	case regenMsg:
@@ -264,7 +357,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Update commit message
 		m.commitMsg = msg.msg
-		// Se ainda não há commitType, tenta identificar a partir da mensagem gerada
+		// If commitType is still empty, try to infer it from the generated message
 		if m.commitType == "" {
 			if guessed := committypes.GuessCommitType(m.commitMsg); guessed != "" {
 				m.commitType = guessed
@@ -290,6 +383,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
 		}
+
+	case viewDiffMsg: // Handle view diff message (from viewDiffCmd)
+		m.state = stateShowDiff // Ensure state is correct
+		// No model update needed, diff content already in Model.diff
+		return m, nil
+
 	}
 	return m, cmd
 }
@@ -308,9 +407,11 @@ func (m Model) View() string {
 	case stateSelectType:
 		return m.viewSelectType()
 	case stateEditing:
-		return m.viewEditing("Editing commit message (ESC to cancel, Ctrl+S to save):")
+		return m.viewEditing("Editing commit message (Ctrl+S to save, ESC to cancel):")
 	case stateEditingPrompt:
-		return m.viewEditing("Editing prompt text (ESC to cancel, Ctrl+S to apply):")
+		return m.viewEditing("Editing prompt text (Ctrl+S to apply, ESC to cancel):")
+	case stateShowDiff:
+		return m.viewDiff() // Render diff view
 	default:
 		return "Unknown state."
 	}
@@ -320,6 +421,7 @@ func (m Model) View() string {
 func (m Model) viewShowCommit() string {
 	header := renderLogo()
 	footer := m.renderFooter()
+	helpView := m.help.View(m) // Help view
 
 	content := commitBoxStyle.Render(m.commitMsg)
 	side := m.renderSideInfo()
@@ -335,20 +437,23 @@ func (m Model) viewShowCommit() string {
 		header,
 		mainCols,
 		footer,
+		helpView, // Add help view to the layout
 	)
 	return ui
 }
 
 func (m Model) viewGenerating() string {
 	header := renderLogo()
-	body := fmt.Sprintf("Generating commit message...\n\n%s", m.spinner.View())
+	body := fmt.Sprintf("Generating commit message... (Attempt %d/%d)\n\n%s", m.regenCount, m.maxRegens, m.spinner.View()) // Regen attempt count
 	footer := m.renderFooter()
+	helpView := m.help.View(m)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		body,
 		footer,
+		helpView,
 	)
 }
 
@@ -356,23 +461,27 @@ func (m Model) viewCommitting() string {
 	header := renderLogo()
 	body := fmt.Sprintf("Committing...\n\n%s", m.spinner.View())
 	footer := m.renderFooter()
+	helpView := m.help.View(m)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		body,
 		footer,
+		helpView,
 	)
 }
 
 func (m Model) viewResult() string {
 	header := renderLogo()
 	body := lipgloss.NewStyle().Margin(1, 2).Render(m.result)
+	helpView := m.help.View(m) // Help also in result screen
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		body,
+		helpView,
 	)
 }
 
@@ -390,14 +499,16 @@ func (m Model) viewSelectType() string {
 	}
 
 	footer := lipgloss.NewStyle().Margin(1, 0).Render(
-		"Use ↑/↓ (or j/k) to navigate, Enter to select, 'q' to cancel.\n",
+		"Use ↑/↓ (or j/k) to navigate, Enter to select, ESC/q to cancel.\n",
 	)
+	helpView := m.help.View(m) // Help in select type
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		b.String(),
 		footer,
+		helpView,
 	)
 }
 
@@ -407,8 +518,21 @@ func (m Model) viewEditing(title string) string {
 	body := lipgloss.NewStyle().Margin(1, 2).Render(
 		fmt.Sprintf("%s\n\n%s", title, m.textarea.View()),
 	)
+	helpView := m.help.View(m) // Help in edit modes
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body)
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, helpView)
+}
+
+func (m Model) viewDiff() string {
+	header := renderLogo()
+	diffTextView := diffStyle.Render(m.diff) // Apply diff style
+
+	body := lipgloss.NewStyle().Margin(1, 2).Render(
+		fmt.Sprintf("Git Diff:\n\n%s\n\nPress ESC/q to return.", diffTextView),
+	)
+	helpView := m.help.View(m) // Help also in diff view
+
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, helpView)
 }
 
 // --- Helpers ---
@@ -427,8 +551,8 @@ func (m Model) renderSideInfo() string {
 }
 
 func (m Model) renderFooter() string {
-	helpText := "Press 'y' to commit, 'r' to regenerate, 'e' to edit, 't' to change type, 'p' to add prompt text, 'q' to quit."
-	return footerStyle.Render(helpText)
+	// Help text is now part of `help.View(m)` using keybindings
+	return "" // Footer is empty, help is handled by `help.Model`
 }
 
 // commitCmd triggers the Git commit operation with a given commit message.
@@ -464,14 +588,14 @@ func regenerate(prompt string, client ai.AIClient, commitType, tmpl string, enab
 	log.Debug().Msg("Received response from AI client")
 
 	// Sanitize the AI output
-	result = ai.SanitizeResponse(result, commitType)
+	result = client.SanitizeResponse(result, commitType)
 
-	// Possivelmente adiciona emoji, se solicitado
-	if enableEmoji {
-		result = git.AddGitmoji(result, commitType)
+	// Always prepend commit type if available.
+	if commitType != "" {
+		result = git.PrependCommitType(result, commitType, enableEmoji)
 	}
 
-	// Aplica template se o usuário especificou
+	// Apply template if specified
 	if tmpl != "" {
 		result, err = template.ApplyTemplate(tmpl, result)
 		if err != nil {
@@ -487,4 +611,43 @@ func autoQuitCmd() tea.Cmd {
 	return tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
 		return autoQuitMsg{}
 	})
+}
+
+// viewDiffCmd sends a message to trigger state change for diff view.
+func viewDiffCmd(diff string) tea.Cmd {
+	return func() tea.Msg {
+		// Could do diff processing here if needed in future, now just message
+		return viewDiffMsg{} // Send message to update state and view
+	}
+}
+
+// guessCommitTypeFromMessage tries to detect a commit type from the message
+// if the user hasn't specified one.
+func guessCommitTypeFromMessage(msg string) string {
+	lower := strings.ToLower(msg)
+
+	// Put "feat" above "fix" so it's matched first if both strings appear
+	switch {
+	case strings.Contains(lower, "feat"), strings.Contains(lower, "add"),
+		strings.Contains(lower, "create"), strings.Contains(lower, "introduce"):
+		return "feat"
+	case strings.Contains(lower, "fix"):
+		return "fix"
+	case strings.Contains(lower, "doc"):
+		return "docs"
+	case strings.Contains(lower, "refactor"):
+		return "refactor"
+	case strings.Contains(lower, "test"):
+		return "test"
+	case strings.Contains(lower, "perf"):
+		return "perf"
+	case strings.Contains(lower, "build"):
+		return "build"
+	case strings.Contains(lower, "ci"):
+		return "ci"
+	case strings.Contains(lower, "chore"):
+		return "chore"
+	default:
+		return ""
+	}
 }
