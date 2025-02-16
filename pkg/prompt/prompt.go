@@ -10,13 +10,15 @@ import (
 func BuildPrompt(diff, language, commitType, additionalText string) string {
 	var sb strings.Builder
 	sb.WriteString("Generate a git commit message following these rules:\n")
-	sb.WriteString("- Use Conventional Commits format (e.g., 'feat: add new feature X', 'fix(login): handle edge case').\n") // Added example
+	sb.WriteString("- Use Conventional Commits format (e.g., 'feat: add new feature X', 'fix(login): handle edge case').\n")
 	sb.WriteString("- Keep the subject line concise (ideally under 50 characters), in the imperative mood.\n")
 	sb.WriteString("- If breaking changes exist, add 'BREAKING CHANGE:' in the body.\n")
 	sb.WriteString("- After the subject line, add a blank line, then bullet points describing changes with '- '.\n")
 	sb.WriteString("- Omit disclaimers, code blocks, or references to AI.\n")
 	sb.WriteString("- Use the present tense and ensure clarity.\n")
 	sb.WriteString("- Output only the commit message.\n")
+	sb.WriteString("- Do NOT include the commit hash or branch name.\n")
+	sb.WriteString("- Do not repeat topics.\n")
 	sb.WriteString("- Do NOT begin your commit message with the word 'git' or references to it.\n")
 	if commitType != "" && committypes.IsValidCommitType(commitType) {
 		sb.WriteString(fmt.Sprintf("- Use the commit type '%s'.\n", commitType))
