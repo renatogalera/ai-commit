@@ -10,17 +10,15 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/ai"
 )
 
-// AnthropicClient implements the ai.AIClient interface using the Anthropic Claude API.
 type AnthropicClient struct {
-	ai.BaseAIClient // Embed BaseAIClient
-	client          *anthropicSDK.Client
-	model           string
+	ai.BaseAIClient
+	client *anthropicSDK.Client
+	model  string
 }
 
-// NewAnthropicClient creates a new AnthropicClient with the provided API key and model.
 func NewAnthropicClient(apiKey, model string) (*AnthropicClient, error) {
 	if apiKey == "" {
-		return nil, errors.New("Anthropic API key is required")
+		return nil, errors.New("anthropic API key is required")
 	}
 	// Create a new client using the go-anthropic library.
 	client := anthropicSDK.NewClient(apiKey)
@@ -28,13 +26,12 @@ func NewAnthropicClient(apiKey, model string) (*AnthropicClient, error) {
 		return nil, errors.New("failed to create Anthropic client")
 	}
 	return &AnthropicClient{
-		BaseAIClient: ai.BaseAIClient{Provider: "anthropic"}, // Initialize BaseAIClient
+		BaseAIClient: ai.BaseAIClient{Provider: "anthropic"},
 		client:       client,
 		model:        model,
 	}, nil
 }
 
-// GetCommitMessage sends the prompt to Anthropic and returns the generated commit message.
 func (ac *AnthropicClient) GetCommitMessage(ctx context.Context, prompt string) (string, error) {
 	req := anthropicSDK.MessagesRequest{
 		Model: anthropicSDK.Model(ac.model),
@@ -60,14 +57,11 @@ func (ac *AnthropicClient) GetCommitMessage(ctx context.Context, prompt string) 
 
 // SanitizeResponse for Anthropic. Override default if needed.
 func (ac *AnthropicClient) SanitizeResponse(message, commitType string) string {
-	// Anthropic specific sanitization if necessary
-	return ac.BaseAIClient.SanitizeResponse(message, commitType) // Fallback to default
+	return ac.BaseAIClient.SanitizeResponse(message, commitType)
 }
 
-// MaybeSummarizeDiff for Anthropic, override if custom behavior required
 func (ac *AnthropicClient) MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
-	// Anthropic specific summarization
-	return ac.BaseAIClient.MaybeSummarizeDiff(diff, maxLength) // Fallback
+	return ac.BaseAIClient.MaybeSummarizeDiff(diff, maxLength)
 }
 
 var _ ai.AIClient = (*AnthropicClient)(nil)

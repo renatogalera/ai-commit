@@ -12,7 +12,6 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 )
 
-// Default values for configuration
 const (
 	DefaultProvider       = "openai"
 	DefaultOpenAIModel    = "chatgpt-4o-latest"
@@ -26,7 +25,6 @@ var (
 	DefaultAuthorEmail = "ai-commit@example.com"
 )
 
-// Config holds the configuration for AI‑Commit.
 type Config struct {
 	Prompt           string   `yaml:"prompt,omitempty"`
 	CommitType       string   `yaml:"commitType,omitempty"`
@@ -35,8 +33,8 @@ type Config struct {
 	InteractiveSplit bool     `yaml:"interactiveSplit,omitempty"`
 	EnableEmoji      bool     `yaml:"enableEmoji,omitempty"`
 	Provider         string   `yaml:"provider,omitempty" validate:"omitempty,oneof=openai gemini anthropic deepseek"`
-	CommitTypes      []string `yaml:"commitTypes,omitempty"` // Custom commit types
-	LockFiles        []string `yaml:"lockFiles,omitempty"`   // Lock files to filter
+	CommitTypes      []string `yaml:"commitTypes,omitempty"`
+	LockFiles        []string `yaml:"lockFiles,omitempty"`
 
 	OpenAIAPIKey    string `yaml:"openAiApiKey,omitempty"`
 	OpenAIModel     string `yaml:"openaiModel,omitempty"`
@@ -46,7 +44,7 @@ type Config struct {
 	AnthropicModel  string `yaml:"anthropicModel,omitempty"`
 	DeepseekAPIKey  string `yaml:"deepseekApiKey,omitempty"`
 	DeepseekModel   string `yaml:"deepseekModel,omitempty"`
-	PromptTemplate  string `yaml:"promptTemplate,omitempty"` // Configurable prompt template
+	PromptTemplate  string `yaml:"promptTemplate,omitempty"`
 
 	AuthorName  string `yaml:"authorName,omitempty"`
 	AuthorEmail string `yaml:"authorEmail,omitempty"`
@@ -121,7 +119,6 @@ func LoadOrCreateConfig() (*Config, error) {
 	return &cfg, nil
 }
 
-// saveConfig writes the configuration to the specified path.
 func saveConfig(path string, cfg *Config) error {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -141,19 +138,15 @@ func ResolveAPIKey(flagVal, envVar, configVal, provider string) (string, error) 
 	if strings.TrimSpace(configVal) != "" {
 		return strings.TrimSpace(configVal), nil
 	}
-	return "", fmt.Errorf("%s API key is required. Provide via flag, %s environment variable, or config.", provider, envVar)
+	return "", fmt.Errorf("%s API key is required. Provide via flag, %s environment variable, or config", provider, envVar)
 }
 
-// Validate validates the Config struct using go-playground/validator.
 func (cfg *Config) Validate() error {
 	v := validator.New()
 	err := v.Struct(cfg)
 	if err != nil {
-		// Use a type assertion to see if the error is a ValidationErrors,
-		// which is more informative.
 		if validationErrs, ok := err.(validator.ValidationErrors); ok {
 			for _, e := range validationErrs {
-				// Can translate each error one at a time.
 				return fmt.Errorf("config validation failed on field '%s': %w", e.Field(), e)
 			}
 		}

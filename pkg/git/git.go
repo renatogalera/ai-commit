@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http" // Import net/http for DetectContentType
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -73,8 +73,8 @@ func GetGitDiff(ctx context.Context) (string, error) {
 		}
 		var newContent string
 		if fileStatus.Staging != git.Deleted {
-			newContentBytes, err := ioutil.ReadFile(newPath)
-			if err == nil && !isBinary(newContentBytes) { // Use better binary check with net/http
+			newContentBytes, err := os.ReadFile(newPath)
+			if err == nil && !isBinary(newContentBytes) {
 				newContent = string(newContentBytes)
 			}
 		}
@@ -90,7 +90,6 @@ func GetGitDiff(ctx context.Context) (string, error) {
 	return diffResult.String(), nil
 }
 
-// getDiffAgainstEmpty generates a diff for untracked files.
 func getDiffAgainstEmpty(repo *git.Repository) (string, error) {
 	worktree, err := repo.Worktree()
 	if err != nil {
@@ -108,8 +107,8 @@ func getDiffAgainstEmpty(repo *git.Repository) (string, error) {
 		}
 		var newContent string
 		if fileStatus.Staging != git.Deleted {
-			data, err := ioutil.ReadFile(filePath)
-			if err == nil && !isBinary(data) { // Use better binary check with net/http
+			data, err := os.ReadFile(filePath)
+			if err == nil && !isBinary(data) {
 				newContent = string(data)
 			}
 		}
@@ -132,7 +131,7 @@ func isBinary(data []byte) bool {
 		strings.HasPrefix(contentType, "video/") ||
 		strings.HasPrefix(contentType, "audio/") ||
 		contentType == "application/octet-stream" ||
-		contentType == "application/pdf" || // Add common binary types if needed
+		contentType == "application/pdf" ||
 		contentType == "application/zip" ||
 		strings.Contains(contentType, "font")
 }

@@ -9,8 +9,6 @@ var validTypes = []string{
 	"feat", "fix", "docs", "style", "refactor", "test", "chore", "perf", "build", "ci",
 }
 
-// SetValidCommitTypes allows updating the list of valid commit types.
-// This can be loaded from config.
 func SetValidCommitTypes(types []string) {
 	if types != nil { // Only update if the provided slice is not nil
 		validTypes = types
