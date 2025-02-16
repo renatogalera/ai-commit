@@ -51,7 +51,7 @@ var (
 	manualSemverFlag     bool
 	providerFlag         string
 	modelFlag            string
-	reviewMessageFlag    bool // Flag for commit message style review
+	reviewMessageFlag    bool
 )
 
 var rootCmd = &cobra.Command{
