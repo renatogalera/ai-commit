@@ -25,7 +25,8 @@ func NewSummarizeCmd(setupAIEnvironment func() (context.Context, context.CancelF
 		Use:   "summarize",
 		Short: "List commits via fzf, pick one, and summarize the commit with AI",
 		Long: `Displays all commits in a fuzzy finder interface; after selecting a commit,
-AI-Commit fetches that commit's diff and calls the AI provider to produce a summary.`,
+AI-Commit fetches that commit's diff and calls the AI provider to produce a summary.
+The resulting output is rendered with a beautiful TUI-like style.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			runSummarizeCommand(cmd, args, setupAIEnvironment)
 		},
@@ -72,7 +73,7 @@ func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Con
 			// Return commit ID first, then commit message, then the humanized date.
 			return fmt.Sprintf("%s | %s | %s", shortHash, firstLine(commit.Message), relativeTime)
 		},
-		fuzzyfinder.WithPromptString("Select a commit to summarize> "),
+		fuzzyfinder.WithPromptString("Select a commit> "),
 	)
 
 	if err != nil {
@@ -105,38 +106,38 @@ func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Con
 // similar to git log --color=always --format='%C(auto)%h%d %s %C(black)%C(bold)%cr'
 // and uses lipgloss for styling.
 func printFormattedSummary(commit *gogitobj.Commit, summary string) {
-	// Styles for the header
-	hashStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
-	subjectStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226"))
-	timeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Bold(true)
+	// Define styles
+	headerStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("63")).
+		Underline(true).
+		MarginBottom(1)
 
-	// Retrieve commit components.
-	commitShort := commit.Hash.String()[:7]
-	subject := firstLine(commit.Message)
-	// Use humanize to get a relative time string (e.g., "2 days ago").
-	relativeTime := humanize.Time(commit.Author.When)
+	infoStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		PaddingLeft(2)
 
-	// Create the header line mimicking the git log format.
-	headerLine := fmt.Sprintf("%s %s %s",
-		hashStyle.Render(commitShort),
-		subjectStyle.Render(subject),
-		timeStyle.Render(relativeTime),
-	)
-	fmt.Println(headerLine)
-	fmt.Println()
-
-	// Now print the detailed summary sections.
-	// Define styles for section titles and content.
 	sectionTitleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("212")).
 		Underline(true).
 		MarginTop(1)
+
 	sectionContentStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).
 		PaddingLeft(2)
+
 	separatorStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240"))
+
+	// Header
+	fmt.Println(headerStyle.Render("Commit Summary"))
+	info := fmt.Sprintf("Short Hash: %s\nAuthor: %s\nDate: %s",
+		commit.Hash.String()[:7],
+		commit.Author.Name,
+		commit.Author.When.Format("Mon Jan 2 15:04:05 MST 2006"))
+	fmt.Println(infoStyle.Render(info))
+	fmt.Println()
 
 	// Process summary sections. We expect sections separated by "###"
 	sections := strings.Split(summary, "###")
