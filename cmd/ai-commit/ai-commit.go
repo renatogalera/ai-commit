@@ -1,3 +1,4 @@
+// main.go
 package main
 
 import (
@@ -21,6 +22,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/provider/deepseek"
 	"github.com/renatogalera/ai-commit/pkg/provider/gemini"
 	"github.com/renatogalera/ai-commit/pkg/provider/openai"
+	"github.com/renatogalera/ai-commit/pkg/provider/phind"
 	"github.com/renatogalera/ai-commit/pkg/template"
 	"github.com/renatogalera/ai-commit/pkg/ui"
 	"github.com/renatogalera/ai-commit/pkg/ui/splitter"
@@ -42,9 +44,10 @@ var (
 	geminiAPIKeyFlag     string
 	anthropicAPIKeyFlag  string
 	deepseekAPIKeyFlag   string
-	languageFlag         string
+	phindAPIKeyFlag      string
 	commitTypeFlag       string
 	templateFlag         string
+	languageFlag         string
 	forceFlag            bool
 	semanticReleaseFlag  bool
 	interactiveSplitFlag bool
@@ -76,6 +79,7 @@ func init() {
 	rootCmd.Flags().StringVar(&geminiAPIKeyFlag, "geminiApiKey", "", "API key for Gemini provider (or env GEMINI_API_KEY)")
 	rootCmd.Flags().StringVar(&anthropicAPIKeyFlag, "anthropicApiKey", "", "API key for Anthropic provider (or env ANTHROPIC_API_KEY)")
 	rootCmd.Flags().StringVar(&deepseekAPIKeyFlag, "deepseekApiKey", "", "API key for Deepseek provider (or env DEEPSEEK_API_KEY)")
+	rootCmd.Flags().StringVar(&phindAPIKeyFlag, "phindApiKey", "", "API key for Phind provider (or env PHIND_API_KEY)")
 
 	rootCmd.Flags().StringVar(&languageFlag, "language", "english", "Language for commit message/review")
 	rootCmd.Flags().StringVar(&commitTypeFlag, "commit-type", "", "Commit type (e.g., feat, fix)")
@@ -85,7 +89,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&interactiveSplitFlag, "interactive-split", false, "Launch interactive commit splitting")
 	rootCmd.Flags().BoolVar(&emojiFlag, "emoji", false, "Include emoji in commit message")
 	rootCmd.Flags().BoolVar(&manualSemverFlag, "manual-semver", false, "Manually select semantic version bump")
-	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, gemini, anthropic, deepseek")
+	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, gemini, anthropic, deepseek, phind")
 	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Sub-model for the chosen provider")
 	rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
 
@@ -272,13 +276,13 @@ func isValidProvider(provider string) bool {
 		"gemini":    true,
 		"anthropic": true,
 		"deepseek":  true,
+		"phind":     true,
 	}
 	return validProviders[provider]
 }
 
 // initAIClient picks and configures the correct AI client based on config and CLI flags
 func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) {
-	// your existing provider-switch code:
 	switch cfg.Provider {
 	case "openai":
 		key, err := config.ResolveAPIKey(apiKeyFlag, "OPENAI_API_KEY", cfg.OpenAIAPIKey, "openai")
@@ -335,6 +339,18 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 			return nil, fmt.Errorf("failed to initialize Deepseek client: %w", err)
 		}
 		return deepseekClient, nil
+
+	case "phind":
+		// phind doesn't require an API key, but it can be provided optionally.
+		key, err := config.ResolveAPIKey(phindAPIKeyFlag, "PHIND_API_KEY", cfg.PhindAPIKey, "phind")
+		if err != nil && strings.TrimSpace(key) == "" {
+			key = ""
+		}
+		model := cfg.PhindModel
+		if modelFlag != "" {
+			model = modelFlag
+		}
+		return phind.NewPhindClient(key, model), nil
 	}
 
 	return nil, fmt.Errorf("invalid provider specified: %s", cfg.Provider)
@@ -424,7 +440,6 @@ func runInteractiveUI(
 	}
 }
 
-// runInteractiveSplit handles chunk-based commit splitting
 func runInteractiveSplit(
 	ctx context.Context,
 	aiClient ai.AIClient,

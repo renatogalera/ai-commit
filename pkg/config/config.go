@@ -18,6 +18,7 @@ const (
 	DefaultGeminiModel    = "models/gemini-2.0-flash"
 	DefaultAnthropicModel = "claude-3-5-sonnet-latest"
 	DefaultDeepseekModel  = "deepseek-chat"
+	DefaultPhindModel     = "Phind-70B" // Valor padrão para o modelo phind
 )
 
 var (
@@ -32,7 +33,7 @@ type Config struct {
 	SemanticRelease  bool     `yaml:"semanticRelease,omitempty"`
 	InteractiveSplit bool     `yaml:"interactiveSplit,omitempty"`
 	EnableEmoji      bool     `yaml:"enableEmoji,omitempty"`
-	Provider         string   `yaml:"provider,omitempty" validate:"omitempty,oneof=openai gemini anthropic deepseek"`
+	Provider         string   `yaml:"provider,omitempty" validate:"omitempty,oneof=openai gemini anthropic deepseek phind"`
 	CommitTypes      []string `yaml:"commitTypes,omitempty"`
 	LockFiles        []string `yaml:"lockFiles,omitempty"`
 
@@ -44,6 +45,8 @@ type Config struct {
 	AnthropicModel  string `yaml:"anthropicModel,omitempty"`
 	DeepseekAPIKey  string `yaml:"deepseekApiKey,omitempty"`
 	DeepseekModel   string `yaml:"deepseekModel,omitempty"`
+	PhindAPIKey     string `yaml:"phindApiKey,omitempty"` // Novo campo para Phind
+	PhindModel      string `yaml:"phindModel,omitempty"`  // Novo campo para Phind
 	PromptTemplate  string `yaml:"promptTemplate,omitempty"`
 
 	AuthorName  string `yaml:"authorName,omitempty"`
@@ -89,12 +92,13 @@ func LoadOrCreateConfig() (*Config, error) {
 			AnthropicModel:   DefaultAnthropicModel,
 			DeepseekAPIKey:   "",
 			DeepseekModel:    DefaultDeepseekModel,
+			PhindAPIKey:      "", // Valor padrão vazio para phind
+			PhindModel:       DefaultPhindModel,
 			AuthorName:       DefaultAuthorName,
 			AuthorEmail:      DefaultAuthorEmail,
 			CommitTypes:      committypes.AllTypes(),       // Default commit types in config
 			LockFiles:        []string{"go.mod", "go.sum"}, // Default lock files
 			PromptTemplate:   "",                           // Default prompt template empty
-
 		}
 		if err := saveConfig(configPath, defaultCfg); err != nil {
 			return nil, fmt.Errorf("failed to create default config: %w", err)
@@ -135,6 +139,10 @@ func ResolveAPIKey(flagVal, envVar, configVal, provider string) (string, error) 
 	}
 	if strings.TrimSpace(configVal) != "" {
 		return strings.TrimSpace(configVal), nil
+	}
+	// For providers like phind that accept an empty API key, do not return error.
+	if provider == "phind" {
+		return "", nil
 	}
 	return "", fmt.Errorf("%s API key is required. Provide via flag, %s environment variable, or config", provider, envVar)
 }
