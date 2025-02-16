@@ -1,6 +1,6 @@
 # AI-Commit
 
-**AI-Commit** is a powerful tool that generates [Conventional Commits](https://www.conventionalcommits.org/) using AI (OpenAI, Google Gemini, Anthropic Claude, DeepSeek). *Automatically generate commit messages for Git, saving you time and improving your commit history.*
+**AI-Commit** is a powerful CLI tool designed to revolutionize your Git workflow by leveraging AI for two key tasks: generating commit messages and providing basic code reviews. By integrating cutting-edge AI models, AI-Commit helps you create meaningful, Conventional Commits-compliant messages and get quick feedback on your code changes, right from your terminal.
 
 It supports:
 - **OpenAI**
@@ -8,51 +8,49 @@ It supports:
 - **Anthropic Claude**
 - **DeepSeek**
 
-Writing good commit messages can be time-consuming. AI-Commit solves this problem by automatically generating clear, concise, and consistent commit messages, enforcing the Conventional Commits standard and leveraging the power of leading AI models.  Whether you're using GPT-4, Gemini, or Claude, AI-Commit streamlines your workflow.
+Say goodbye to tedious commit message writing and superficial code reviews. AI-Commit automates these processes, saving you valuable time and ensuring consistency and quality in your development lifecycle.
 
 [https://github.com/renatogalera/ai-commit](https://github.com/renatogalera/ai-commit)
 
 ---
 
-## Features
+## ✨ Key Features
 
-- **AI-Powered Commit Messages:** Generate commit messages with AI (OpenAI, Gemini, Anthropic, and DeepSeek).
-- **Conventional Commits:** Enforces the Conventional Commits standard for consistency.
-- **Interactive TUI**:  Engage with an enhanced interactive Text User Interface to review, regenerate, and customize commit messages with improved feedback and help.
-- **Non-Interactive Mode**: Bypass the interactive TUI and commit directly using the `--force` flag for automated workflows.
-- **Semantic Release:**  Perform AI-assisted semantic version bumps or manually select version increments (`--manual-semver`).
-- **Interactive Commit Splitting**: Utilize a chunk-based partial commit TUI with chunk selection and selection inversion for fine-grained control over commits.
-- **Emoji Support:**  Add emojis to your commit messages with the `--emoji` flag.
-- **Custom Templates:**  Create and apply custom commit message templates (e.g., `Branch: {GIT_BRANCH}\n{COMMIT_MESSAGE}`).
-- **Multiple AI Providers**: Seamlessly switch between OpenAI, Google Gemini, Anthropic Claude, and DeepSeek to utilize the best AI for your needs.
-- **Configurable Commit Types**: Tailor AI-Commit to your project's commit conventions by customizing the accepted commit types in the configuration file.
-- **Lock File Filtering**: Automatically filter out diffs from lock files (`go.mod`, `package-lock.json`, etc.) to focus AI generation on relevant code changes.
-- **Configurable Prompt**: Customize the AI prompt template used to generate commit messages for advanced control over AI behavior.
-- **View Diff in TUI**: Review the full Git diff directly within the interactive TUI before committing, using the 'l' key.
-- **Enhanced Splitter UI**: The interactive split feature now includes chunk selection inversion and improved status feedback in the TUI.
+- **AI-Powered Commit Messages**: Automatically generate insightful and Conventional Commits-compliant messages using top AI providers (OpenAI, Gemini, Anthropic, DeepSeek).
+- **AI Code Reviewer (Subcommand)**: Get basic, AI-driven code reviews directly in your terminal. Identify potential style issues, refactoring opportunities, and basic security concerns before committing. Use the `ai-commit review` subcommand to analyze your staged changes.
+- **Interactive TUI**: Refine commit messages in an enhanced, user-friendly Text User Interface. Regenerate messages, change commit types, edit prompts, and even view the full diff—all within the TUI.
+- **Non-Interactive Mode (`--force`)**: Automate commit message generation in scripts or workflows, bypassing the TUI for quick, direct commits.
+- **Semantic Release (`--semantic-release`)**: Streamline your release process with AI-assisted semantic version bumping. Choose between AI-suggested version updates or manual version selection via TUI (`--manual-semver`).
+- **Interactive Commit Splitting (`--interactive-split`)**: Gain granular control over your commits with chunk-based staging and commit message generation for partial commits.
+- **Emoji Support (`--emoji`)**: Add a touch of visual flair to your commit history with automatically включены emojis based on commit types.
+- **Customizable Templates (`--template`)**: Tailor commit messages to your team's style with custom templates, incorporating dynamic values like branch names.
+- **Multi-Provider AI Support**: Choose the best AI for each task by switching seamlessly between OpenAI, Gemini, Anthropic, and DeepSeek.
+- **Configurable and Filterable**: Adapt AI-Commit to your projects with customizable commit types and prompt templates. Filter lock file diffs for cleaner, AI-focused message generation and reviews.
+- **Diff View in TUI**: Inspect complete Git diffs within the TUI (`l` key) for thorough pre-commit reviews.
+- **Enhanced Splitter UI**: Benefit from improved interactive splitting with chunk selection inversion and clear status updates.
 
 ---
 
-## Installation
+## 🛠️ Installation
 
 ```bash
 git clone https://github.com/renatogalera/ai-commit.git
 cd ai-commit
 go build -o ai-commit ./cmd/ai-commit
-# Optionally move it into your PATH
+# Optionally move it into your PATH for global access
 sudo mv ai-commit /usr/local/bin/
 ```
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
-A `config.yaml` is auto-created at `~/.config/ai-commit/config.yaml` with default settings that you can customize:
+AI-Commit automatically creates a `config.yaml` file at `~/.config/ai-commit/config.yaml` upon first run. This file lets you personalize default settings:
 
 ```yaml
 provider: "openai"
 openAiApiKey: "sk-YOUR-OPENAI-KEY"
-openaiModel: "chatgpt-4o-latest"
+openaiModel: "gpt-4o-latest"
 
 geminiApiKey: "YOUR-GEMINI-KEY"
 geminiModel: "models/gemini-2.0-flash"
@@ -68,8 +66,8 @@ interactiveSplit: false
 enableEmoji: false
 commitType: ""
 template: ""
-promptTemplate: "" # Customize the AI prompt template here
-commitTypes: # Customize accepted commit types for your project
+promptTemplate: "" # Customize the AI prompt template for commit messages and reviews
+commitTypes: # Define your project's accepted commit types
   - "feat"
   - "fix"
   - "docs"
@@ -80,14 +78,15 @@ commitTypes: # Customize accepted commit types for your project
   - "perf"
   - "build"
   - "ci"
-lockFiles: # Specify lock files to filter from diff
+lockFiles: # Specify lock files to be ignored in diffs for commit messages and reviews
   - "go.mod"
   - "go.sum"
 ```
 
-> **Note**: Command-line flags always take precedence over configuration file values. API keys can also be provided through environment variables.
+> **Note**: Command-line flags override config file settings. API keys can be set via environment variables or within `config.yaml`.
 
-API keys can be specified via environment variables:
+API Keys via Environment Variables:
+
 - `OPENAI_API_KEY`
 - `GEMINI_API_KEY`
 - `ANTHROPIC_API_KEY`
@@ -95,123 +94,118 @@ API keys can be specified via environment variables:
 
 ---
 
-## Basic Usage
+## 🚀 Basic Usage
 
 1.  **Stage your changes**:
     ```bash
     git add .
     ```
-2.  **Run AI-Commit**:
-    ```bash
-    ai-commit
-    ```
-3.  **Interactive TUI**:  The TUI will launch, presenting you with the AI-generated commit message and several options:
 
-    *   **Confirm Commit**: Press `Enter` or `y` to accept the message and create the commit.
-    *   **Regenerate**: Press `r` to generate a new commit message using AI. Track regeneration attempts displayed in the UI.
-    *   **Change Commit Type**: Press `t` to select a different commit type from a list, influencing the next AI message generation.
-    *   **Edit Message**: Press `e` to manually edit the commit message within the TUI. Save with `Ctrl+s` and cancel with `Esc`.
-    *   **Edit Prompt**: Press `p` to customize the prompt text sent to the AI for message generation, allowing for very specific instructions. Apply with `Ctrl+s` and cancel with `Esc`.
-    *   **View Diff**: Press `l` to inspect the complete Git diff directly in the TUI before committing. Press `Esc` or `q` to return.
-    *   **Help**: Press `?` to toggle the help view, displaying available keybindings for easy navigation and action.
-    *   **Quit**: Press `q`, `Esc`, or `Ctrl+C` to exit AI-Commit without committing.
+2.  **Run AI-Commit for Commit Message**:
+    ```bash
+    ai-commit 
+    ```
+    Initiates the interactive TUI to generate, review, and commit your message.
+
+3.  **Run AI-Commit for Code Review**:
+    ```bash
+    ai-commit review
+    ```
+    Triggers an AI-powered code review of your staged changes, displaying suggestions in the terminal.
+
+4.  **Interactive TUI Options**: When the TUI is active (after running `ai-commit` without `review`), utilize these options:
+
+    -   **Confirm Commit**: `Enter` or `y` to commit with the generated message.
+    -   **Regenerate Message**: `r` to generate a new commit message. Track regen attempts in the UI.
+    -   **Change Commit Type**: `t` to select a different commit type, influencing AI generation.
+    -   **Edit Message**: `e` to manually edit the commit message in the TUI (`Ctrl+s` to save, `Esc` to cancel).
+    -   **Edit Prompt**: `p` to customize the AI prompt text for specific instructions (`Ctrl+s` to apply, `Esc` to cancel).
+    -   **View Diff**: `l` to review the full Git diff within the TUI (`Esc` or `q` to return).
+    -   **Help**: `?` to toggle help text showing keybindings.
+    -   **Quit**: `q`, `Esc`, or `Ctrl+C` to exit without commit.
 
 ---
 
-## Command-Line Flags
+## 🎛️ Command-Line Flags
 
-**Key flags**:
+**Main Flags**:
 
-*   `--provider`  
-    *Which AI provider to use?*  
-    Valid: `openai`, `gemini`, `anthropic`, `deepseek`  
-    (Default from config.yaml)
+*   `--provider`: AI provider selection (`openai`, `gemini`, `anthropic`, `deepseek`).
+*   `--model`: Specific model choice per provider (e.g., `gpt-4`, `models/gemini-2.0-flash`).
+*   `--apiKey`, `--geminiApiKey`, `--anthropicApiKey`, `--deepseekApiKey`: API keys for each provider.
+*   `--commit-type`: Force a commit type (e.g., `fix`, `feat`) for non-interactive use or AI guidance.
+*   `--template`: Custom template for commit messages, wrapping AI output.
+*   `--prompt` *(Deprecated)*: Use `promptTemplate` in `config.yaml` for persistent prompt customization instead.
 
-*   `--model`  
-    *Which sub-model to use within that provider?*  
-    e.g., `gpt-4`, `models/gemini-2.0-flash`, `claude-2`
+**Workflow Control Flags**:
 
-*   `--apiKey`  
-    *OpenAI API key.*  
-    (For Gemini, Anthropic, or DeepSeek, use `--geminiApiKey`, `--anthropicApiKey`, or `--deepseekApiKey` respectively.)
+*   `--force`: Non-interactive commit; skips TUI and commits directly.
+*   `--semantic-release`: Enables semantic versioning; suggests/creates version tags post-commit.
+*   `--manual-semver`: With `--semantic-release`, manually select version type in TUI.
+*   `--interactive-split`: Launches chunk-based commit splitting TUI.
+*   `--emoji`: Adds emojis to commit messages based on type.
 
-*   `--commit-type fix|feat|docs|refactor|test|perf|build|ci|chore`  
-    *Specify commit type if desired. Useful for guiding the AI or for non-interactive usage.*
+**Subcommand**:
 
-*   `--template "Branch: {GIT_BRANCH}\n{COMMIT_MESSAGE}"`  
-    *Commit template to wrap the AI's generated message with extra information or formatting.*
-
-*   `--prompt`
-    *[Deprecated - use promptTemplate in config.yaml]* - *[Flag retained for backward compatibility, but configuring `promptTemplate` in `config.yaml` is now recommended for persistent custom prompts]* Commit prompt to be passed to the AI model. Use for advanced prompt engineering or specific instructions.
-
-*   `--force`
-    *Bypass the interactive TUI and commit directly using the AI-generated message. Ideal for automated scripts and workflows.*
-
-*   `--semantic-release`
-    *Enable semantic release functionality to automatically suggest and create a version tag based on the commit message, following semantic versioning conventions. Use with `--manual-semver` for manual version selection in TUI.*
-
-*   `--manual-semver`
-    *When used with `--semantic-release`, launches a TUI to manually select the semantic version bump (Major, Minor, Patch) instead of AI-driven suggestion.*
-
-*   `--interactive-split`
-    *Launch the interactive commit splitting TUI. Allows for selecting specific diff chunks to stage and commit separately, generating commit messages for each partial commit.*
-
-*   `--emoji`
-    *Include an emoji prefix in the commit message based on the commit type (e.g., `✨ feat: ...`).*
+*   `review`: Trigger AI-powered code review of staged changes: 
+    ```bash
+    ai-commit review 
+    ```
 
 ---
 
-## Examples
+## ✍️ Examples
 
-1.  **Simple Interactive Usage**:
+1.  **Interactive Commit**:
     ```bash
     ai-commit
     ```
-    Launches the interactive TUI to review and commit a message.
+    Starts the TUI for commit message review and commit.
 
-2.  **Force Commit (Non-Interactive)**:
+2.  **Force Commit**:
     ```bash
     ai-commit --force
     ```
-    Commits staged changes immediately using the AI-generated message, skipping the TUI.
+    Directly commits staged changes using AI message generation.
 
-3.  **Semantic Release (AI-Driven Version Bump)**:
+3.  **AI-Powered Code Review**:
     ```bash
-    ai-commit --semantic-release
+    ai-commit review
     ```
-    Performs a commit and then suggests and creates a version tag based on the commit message.
+    Analyzes staged code changes and outputs AI-generated review suggestions in the terminal.
 
-4.  **Semantic Release (Manual Version Selection)**:
+4.  **Semantic Release with Manual Versioning**:
     ```bash
     ai-commit --semantic-release --manual-semver
     ```
-    Launches a TUI to manually select Major, Minor, or Patch version bump after the commit.
+    Combines commit, AI-suggested next version, and manual version selection in TUI.
 
-5.  **Provider and Model Selection**:
+5.  **Provider/Model Options**:
     ```bash
-    ai-commit --provider=openai --model=gpt-4 --apiKey=sk-OPENAI_KEY
-    ai-commit --provider=gemini --model=models/gemini-2.0-flash --geminiApiKey=YOUR_GEMINI_KEY
-    ai-commit --provider=anthropic --model=claude-3-sonnet --anthropicApiKey=YOUR_ANTHROPIC_KEY
-    ai-commit --provider=deepseek --model=deepseek-chat --deepseekApiKey=YOUR_DEEPSEEK_KEY
+    ai-commit --provider=openai --model=gpt-4 --apiKey=sk-...
+    ai-commit --provider=gemini --model=models/gemini-2.0-flash --geminiApiKey=... 
+    ai-commit --provider=anthropic --model=claude-3-sonnet --anthropicApiKey=...
+    ai-commit --provider=deepseek --model=deepseek-chat --deepseekApiKey=...
     ```
-    Examples of specifying different AI providers and models with API keys directly via flags.
+    Demonstrates setting provider, model, and API key via flags.
 
-6.  **Interactive Split Commit**:
+6.  **Interactive Split for Partial Commits**:
     ```bash
     ai-commit --interactive-split
     ```
-    Starts the interactive split TUI to select and commit partial changes.
+    Initiates TUI for chunk selection and partial commit generation.
+
 
 ---
 
-## Get Started
+## 🚀 Get Started
 
-Ready to improve your commit messages and streamline your Git workflow with AI? Install AI-Commit today and start generating better, more consistent commits!
+Elevate your Git workflow today! Install AI-Commit to generate smarter commit messages and gain AI-driven insights into your code changes.
+
 ```bash
 git clone https://github.com/renatogalera/ai-commit.git
 cd ai-commit
 go build -o ai-commit ./cmd/ai-commit
 sudo mv ai-commit /usr/local/bin/
 ```
-
 ---
