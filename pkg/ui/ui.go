@@ -62,14 +62,14 @@ var helpStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("212")).
 	Bold(true)
 
-func NewUIModel(commitMsg string, diff string, language string, prompt string, commitType string, tmpl string, enableEmoji bool, client ai.AIClient) Model {
+// NewUIModel creates a new UI model.
+func NewUIModel(commitMsg, diff, language, promptText, commitType, tmpl string, enableEmoji bool, client ai.AIClient) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 
 	ta := textarea.New()
-	ta.Placeholder = "Edite aqui..."
+	ta.Placeholder = "Edit here..."
 	ta.Prompt = "> "
-	ta.CharLimit = 0
 	ta.SetWidth(50)
 	ta.SetHeight(10)
 	ta.ShowLineNumbers = false
@@ -79,7 +79,7 @@ func NewUIModel(commitMsg string, diff string, language string, prompt string, c
 		commitMsg:     commitMsg,
 		diff:          diff,
 		language:      language,
-		prompt:        prompt,
+		prompt:        promptText,
 		commitType:    commitType,
 		template:      tmpl,
 		enableEmoji:   enableEmoji,
@@ -93,8 +93,9 @@ func NewUIModel(commitMsg string, diff string, language string, prompt string, c
 	}
 }
 
-func NewProgram(model Model) *tea.Program {
-	return tea.NewProgram(model, tea.WithAltScreen())
+// NewProgram creates a new Bubble Tea program.
+func NewProgram(m Model) *tea.Program {
+	return tea.NewProgram(m, tea.WithAltScreen())
 }
 
 func (m Model) Init() tea.Cmd {
@@ -121,7 +122,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, commitCmd(m.commitMsg)
 			case "r":
 				if m.regenCount >= m.maxRegens {
-					m.result = fmt.Sprintf("Regenerations maximum (%d) reached. No more regenerations allowed.", m.maxRegens)
+					m.result = fmt.Sprintf("Maximum regenerations (%d) reached.", m.maxRegens)
 					m.state = stateResult
 					return m, autoQuitCmd()
 				}
@@ -203,13 +204,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case regenMsg:
 		if msg.err != nil {
-			m.result = fmt.Sprintf("Error generating commit message: %v", msg.err)
+			m.result = fmt.Sprintf("Error: %v", msg.err)
 			m.state = stateResult
 			return m, autoQuitCmd()
-		} else {
-			m.commitMsg = msg.msg
-			m.state = stateShowCommit
 		}
+		m.commitMsg = msg.msg
+		m.state = stateShowCommit
 	case commitResultMsg:
 		if msg.err != nil {
 			m.result = fmt.Sprintf("Commit failed: %v", msg.err)
@@ -226,15 +226,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
-	return m, cmd
+	newList, tcmd := m.textarea.Update(msg)
+	m.textarea = newList
+	return m, tcmd
 }
 
 func (m Model) View() string {
 	switch m.state {
 	case stateShowCommit:
-		helpText := helpStyle.Render(
-			"Press 'y' to commit, 'r' to regenerate,\n'e' to edit the message, 't' to change the commit type,\n'p' to add custom prompt text or 'q' to quit.",
-		)
+		helpText := helpStyle.Render("Press 'y' to commit, 'r' to regenerate,\n'e' to edit, 't' to change type,\n'p' to add prompt text, 'q' to quit.")
 		return fmt.Sprintf("%s\n\n%s", m.commitMsg, helpText)
 	case stateGenerating:
 		return fmt.Sprintf("Generating commit message... %s", m.spinner.View())
@@ -250,14 +250,14 @@ func (m Model) View() string {
 			if i == m.selectedIndex {
 				cursor = ">"
 			}
-			b.WriteString(fmt.Sprintf("%s %s => %s\n", cursor, ct, ct))
+			b.WriteString(fmt.Sprintf("%s %s\n", cursor, ct))
 		}
-		b.WriteString("\nUse up/down (or j/k) to navigate, enter to select,\n'q' or esc to go back.\n")
+		b.WriteString("\nUse up/down to navigate, enter to select, 'q' to cancel.\n")
 		return b.String()
 	case stateEditing:
-		return fmt.Sprintf("Editing commit message (Press ESC to cancel, Ctrl+S to save):\n\n%s", m.textarea.View())
+		return fmt.Sprintf("Editing commit message (ESC to cancel, Ctrl+S to save):\n\n%s", m.textarea.View())
 	case stateEditingPrompt:
-		return fmt.Sprintf("Add custom prompt text (Press ESC to cancel, Ctrl+S to apply):\n\n%s", m.textarea.View())
+		return fmt.Sprintf("Editing prompt text (ESC to cancel, Ctrl+S to apply):\n\n%s", m.textarea.View())
 	}
 	return ""
 }
@@ -271,14 +271,14 @@ func commitCmd(commitMsg string) tea.Cmd {
 	}
 }
 
-func regenCmd(client ai.AIClient, prompt string, commitType string, tmpl string, enableEmoji bool) tea.Cmd {
+func regenCmd(client ai.AIClient, prompt, commitType, tmpl string, enableEmoji bool) tea.Cmd {
 	return func() tea.Msg {
 		msg, err := regenerate(prompt, client, commitType, tmpl, enableEmoji)
 		return regenMsg{msg: msg, err: err}
 	}
 }
 
-func regenerate(prompt string, client ai.AIClient, commitType string, tmpl string, enableEmoji bool) (string, error) {
+func regenerate(prompt string, client ai.AIClient, commitType, tmpl string, enableEmoji bool) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	result, err := client.GetCommitMessage(ctx, prompt)
