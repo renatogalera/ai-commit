@@ -1,6 +1,6 @@
 # AI-Commit
 
-**AI-Commit** is a powerful CLI tool designed to revolutionize your Git workflow by leveraging AI for two key tasks: generating commit messages and providing basic code reviews. By integrating cutting-edge AI models, AI-Commit helps you create meaningful, Conventional Commits-compliant messages and get quick feedback on your code changes, right from your terminal.
+**AI-Commit** is a powerful CLI tool designed to revolutionize your Git workflow by leveraging AI for three key tasks: generating commit messages, providing basic code reviews, and enforcing commit message style guides. By integrating cutting-edge AI models, AI-Commit helps you create meaningful, Conventional Commits-compliant messages, get quick feedback on your code changes, and ensure your commit messages adhere to a high standard of clarity and informativeness—all right from your terminal.
 
 It supports:
 - **OpenAI**
@@ -8,7 +8,7 @@ It supports:
 - **Anthropic Claude**
 - **DeepSeek**
 
-Say goodbye to tedious commit message writing and superficial code reviews. AI-Commit automates these processes, saving you valuable time and ensuring consistency and quality in your development lifecycle.
+Boost your commit quality, enforce standards, and save valuable time with AI-Commit, your all-in-one AI assistant for Git workflows.
 
 [https://github.com/renatogalera/ai-commit](https://github.com/renatogalera/ai-commit)
 
@@ -18,11 +18,12 @@ Say goodbye to tedious commit message writing and superficial code reviews. AI-C
 
 - **AI-Powered Commit Messages**: Automatically generate insightful and Conventional Commits-compliant messages using top AI providers (OpenAI, Gemini, Anthropic, DeepSeek).
 - **AI Code Reviewer (Subcommand)**: Get basic, AI-driven code reviews directly in your terminal. Identify potential style issues, refactoring opportunities, and basic security concerns before committing. Use the `ai-commit review` subcommand to analyze your staged changes.
-- **Interactive TUI**: Refine commit messages in an enhanced, user-friendly Text User Interface. Regenerate messages, change commit types, edit prompts, and even view the full diff—all within the TUI.
-- **Non-Interactive Mode (`--force`)**: Automate commit message generation in scripts or workflows, bypassing the TUI for quick, direct commits.
+- **AI Commit Message Style Guide Enforcer (`--review-message`)**: Automatically review and enforce your commit message style using AI. Get feedback on clarity, informativeness, and overall quality to ensure consistently excellent commit messages. Enable with the `--review-message` flag during commit message generation.
+- **Interactive TUI**: Refine commit messages in an enhanced, user-friendly Text User Interface. Regenerate messages, change commit types, edit prompts, view the full diff, and now also benefit from AI-driven style review feedback—all within the TUI.
+- **Non-Interactive Mode (`--force`)**: Automate commit message generation and style enforcement in scripts or workflows, bypassing the TUI for quick, direct commits.
 - **Semantic Release (`--semantic-release`)**: Streamline your release process with AI-assisted semantic version bumping. Choose between AI-suggested version updates or manual version selection via TUI (`--manual-semver`).
 - **Interactive Commit Splitting (`--interactive-split`)**: Gain granular control over your commits with chunk-based staging and commit message generation for partial commits.
-- **Emoji Support (`--emoji`)**: Add a touch of visual flair to your commit history with automatically включены emojis based on commit types.
+- **Emoji Support (`--emoji`)**: Add a touch of visual flair to your commit history with automatically included emojis based on commit types.
 - **Customizable Templates (`--template`)**: Tailor commit messages to your team's style with custom templates, incorporating dynamic values like branch names.
 - **Multi-Provider AI Support**: Choose the best AI for each task by switching seamlessly between OpenAI, Gemini, Anthropic, and DeepSeek.
 - **Configurable and Filterable**: Adapt AI-Commit to your projects with customizable commit types and prompt templates. Filter lock file diffs for cleaner, AI-focused message generation and reviews.
@@ -64,8 +65,9 @@ deepseekModel: "deepseek-chat"
 semanticRelease: false
 interactiveSplit: false
 enableEmoji: false
+commitType: ""
 template: ""
-promptTemplate: "" # Customize the AI prompt template for commit messages and reviews
+promptTemplate: "" # Customize the AI prompt template for commit messages, reviews, and style checks
 commitTypes: # Define your project's accepted commit types
   - "feat"
   - "fix"
@@ -80,9 +82,10 @@ commitTypes: # Define your project's accepted commit types
 lockFiles: # Specify lock files to be ignored in diffs for commit messages and reviews
   - "go.mod"
   - "go.sum"
+
 ```
 
-> **Note**: Command-line flags override config file settings. API keys can be set via environment variables or within `config.yaml`.
+> **Note**: Command-line flags always take precedence over configuration file values. API keys can be set via environment variables or within `config.yaml`. You can now also customize the `promptTemplate` in this file to adjust the behavior of both commit message generation and code reviews.
 
 API Keys via Environment Variables:
 
@@ -100,17 +103,17 @@ API Keys via Environment Variables:
     git add .
     ```
 
-2.  **Run AI-Commit for Commit Message**:
+2.  **Run AI-Commit for Commit Message (with optional Style Review)**:
     ```bash
-    ai-commit 
+    ai-commit [--review-message]
     ```
-    Initiates the interactive TUI to generate, review, and commit your message.
+    Launches the interactive TUI (or non-interactive commit if `--force` is used). Use `--review-message` flag to enable AI-based style review of the commit message.
 
 3.  **Run AI-Commit for Code Review**:
     ```bash
     ai-commit review
     ```
-    Triggers an AI-powered code review of your staged changes, displaying suggestions in the terminal.
+    Executes an AI code review on staged changes, displaying suggestions.
 
 4.  **Interactive TUI Options**: When the TUI is active (after running `ai-commit` without `review`), utilize these options:
 
@@ -122,6 +125,7 @@ API Keys via Environment Variables:
     -   **View Diff**: `l` to review the full Git diff within the TUI (`Esc` or `q` to return).
     -   **Help**: `?` to toggle help text showing keybindings.
     -   **Quit**: `q`, `Esc`, or `Ctrl+C` to exit without commit.
+    -  **AI Style Review Feedback**: When using `--review-message`, any style feedback from the AI will also be displayed in the TUI (feature to be implemented in future versions for interactive feedback). For now, feedback is shown in the terminal output before the TUI.
 
 ---
 
@@ -143,6 +147,7 @@ API Keys via Environment Variables:
 *   `--manual-semver`: With `--semantic-release`, manually select version type in TUI.
 *   `--interactive-split`: Launches chunk-based commit splitting TUI.
 *   `--emoji`: Adds emojis to commit messages based on type.
+*    `--review-message`:  **NEW** - Enable AI-powered commit message style review. After generating a commit message, AI-Commit will also send it for style review and provide feedback in the terminal, helping ensure high-quality, informative commit messages.
 
 **Subcommand**:
 
@@ -155,51 +160,55 @@ API Keys via Environment Variables:
 
 ## ✍️ Examples
 
-1.  **Interactive Commit**:
+1.  **Interactive Commit with Style Review**:
     ```bash
-    ai-commit
+    ai-commit --review-message
     ```
-    Starts the TUI for commit message review and commit.
+    Launches the interactive TUI after generating and AI-reviewing the commit message style.
 
-2.  **Force Commit**:
+2.  **Force Commit with Style Review (Non-Interactive)**:
     ```bash
-    ai-commit --force
+    ai-commit --force --review-message
     ```
-    Directly commits staged changes using AI message generation.
+    Directly commits staged changes after generating and AI-reviewing the commit message style, skipping the TUI. Style review feedback is printed to the terminal before commit.
 
-3.  **AI-Powered Code Review**:
+3.  **Basic Commit Message Generation**:
+    ```bash
+    ai-commit 
+    ```
+     Standard interactive commit message generation, without style review.
+
+4.  **AI-Powered Code Review**:
     ```bash
     ai-commit review
     ```
-    Analyzes staged code changes and outputs AI-generated review suggestions in the terminal.
+    Executes AI code review and outputs suggestions to the terminal.
 
-4.  **Semantic Release with Manual Versioning**:
+5.  **Semantic Release (Manual Version)**:
     ```bash
     ai-commit --semantic-release --manual-semver
     ```
-    Combines commit, AI-suggested next version, and manual version selection in TUI.
+    Semantic release with manual version selection TUI.
 
-5.  **Provider/Model Options**:
+6.  **Provider and Model Selection**:
     ```bash
     ai-commit --provider=openai --model=gpt-4 --apiKey=sk-...
     ai-commit --provider=gemini --model=models/gemini-2.0-flash --geminiApiKey=... 
     ai-commit --provider=anthropic --model=claude-3-sonnet --anthropicApiKey=...
     ai-commit --provider=deepseek --model=deepseek-chat --deepseekApiKey=...
     ```
-    Demonstrates setting provider, model, and API key via flags.
 
-6.  **Interactive Split for Partial Commits**:
+7.  **Interactive Split Commit**:
     ```bash
     ai-commit --interactive-split
     ```
-    Initiates TUI for chunk selection and partial commit generation.
-
+    Starts interactive split TUI.
 
 ---
 
 ## 🚀 Get Started
 
-Elevate your Git workflow today! Install AI-Commit to generate smarter commit messages and gain AI-driven insights into your code changes.
+Take your commit messages and code quality to the next level with AI-Commit! Install it now to generate smarter commits, enforce message styles, and gain AI-driven insights into your code changes.
 
 ```bash
 git clone https://github.com/renatogalera/ai-commit.git
