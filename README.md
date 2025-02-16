@@ -10,6 +10,8 @@ It supports:
 
 Writing good commit messages can be time-consuming. AI-Commit solves this problem by automatically generating clear, concise, and consistent commit messages, enforcing the Conventional Commits standard and leveraging the power of leading AI models.  Whether you're using GPT-4, Gemini, or Claude, AI-Commit streamlines your workflow.
 
+[https://github.com/renatogalera/ai-commit](https://github.com/renatogalera/ai-commit)
+
 ---
 
 ## Features
