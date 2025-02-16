@@ -16,10 +16,10 @@ type OpenAIClient struct {
 	model  string
 }
 
-// NewOpenAIClient creates a new OpenAIClient using the provided client and model.
-func NewOpenAIClient(client *gogpt.Client, model string) *OpenAIClient {
+// NewOpenAIClient creates a new OpenAIClient using the provided API key and model.
+func NewOpenAIClient(key, model string) *OpenAIClient {
 	return &OpenAIClient{
-		client: client,
+		client: gogpt.NewClient(key),
 		model:  model,
 	}
 }
