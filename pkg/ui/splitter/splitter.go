@@ -9,13 +9,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss" // Lipgloss for styling
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/renatogalera/ai-commit/pkg/ai"
 	"github.com/renatogalera/ai-commit/pkg/git"
 )
 
-// splitterState represents UI state in the splitter.
 type splitterState int
 
 const (
@@ -24,7 +23,6 @@ const (
 	stateCommitted
 )
 
-// --- Lipgloss Styles for Splitter ---
 var (
 	selectedChunkStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("212")) // Highlight color for selected chunks

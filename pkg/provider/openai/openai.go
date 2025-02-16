@@ -12,12 +12,11 @@ import (
 )
 
 type OpenAIClient struct {
-	ai.BaseAIClient // Embed base client
-	client          *gogpt.Client
-	model           string
+	ai.BaseAIClient
+	client *gogpt.Client
+	model  string
 }
 
-// NewOpenAIClient creates a new OpenAIClient using the provided API key and model.
 func NewOpenAIClient(key, model string) *OpenAIClient {
 	return &OpenAIClient{
 		BaseAIClient: ai.BaseAIClient{Provider: "openai"}, // Initialize base client
@@ -46,16 +45,12 @@ func (oc *OpenAIClient) GetCommitMessage(ctx context.Context, prompt string) (st
 	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }
 
-// SanitizeResponse cleans OpenAI's specific responses (if needed). Overrides default.
 func (oc *OpenAIClient) SanitizeResponse(message, commitType string) string {
-	// Add OpenAI-specific sanitization logic here, if different from default.
-	return oc.BaseAIClient.SanitizeResponse(message, commitType) // Fallback to default if no specific logic
+	return oc.BaseAIClient.SanitizeResponse(message, commitType)
 }
 
-// MaybeSummarizeDiff implements provider-specific diff summarization for OpenAI (if needed). Overrides default.
 func (oc *OpenAIClient) MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
-	// Add OpenAI-specific summarization logic if needed.
-	return oc.BaseAIClient.MaybeSummarizeDiff(diff, maxLength) // Fallback to default if no specific logic
+	return oc.BaseAIClient.MaybeSummarizeDiff(diff, maxLength)
 }
 
 var _ ai.AIClient = (*OpenAIClient)(nil)

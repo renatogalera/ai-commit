@@ -11,11 +11,10 @@ import (
 )
 
 type GeminiClient struct {
-	ai.BaseAIClient // Embed BaseAIClient
-	client          *genai.GenerativeModel
+	ai.BaseAIClient
+	client *genai.GenerativeModel
 }
 
-// NewClient creates a new GeminiClient from the provided generative model.
 func NewClient(client *genai.GenerativeModel) *GeminiClient {
 	return &GeminiClient{
 		BaseAIClient: ai.BaseAIClient{Provider: "gemini"}, // Initialize BaseAIClient
@@ -23,7 +22,6 @@ func NewClient(client *genai.GenerativeModel) *GeminiClient {
 	}
 }
 
-// NewGeminiProClient creates a new Gemini generative model client using the provided API key and model name.
 func NewGeminiProClient(ctx context.Context, apiKey string, modelName string) (*genai.GenerativeModel, error) {
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
@@ -49,14 +47,11 @@ func (gc *GeminiClient) GetCommitMessage(ctx context.Context, prompt string) (st
 
 // SanitizeResponse cleans Gemini specific responses if needed.  Overrides default.
 func (gc *GeminiClient) SanitizeResponse(message, commitType string) string {
-	// Add Gemini-specific sanitization, e.g., for handling lists, etc., if needed
-	return gc.BaseAIClient.SanitizeResponse(message, commitType) // Fallback to default
+	return gc.BaseAIClient.SanitizeResponse(message, commitType)
 }
 
-// MaybeSummarizeDiff for Gemini if special handling needed. Overrides default.
 func (gc *GeminiClient) MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
-	// Gemini-specific diff summarization if required
-	return gc.BaseAIClient.MaybeSummarizeDiff(diff, maxLength) // Fallback
+	return gc.BaseAIClient.MaybeSummarizeDiff(diff, maxLength)
 }
 
 var _ ai.AIClient = (*GeminiClient)(nil)

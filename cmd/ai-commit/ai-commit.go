@@ -85,7 +85,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&manualSemverFlag, "manual-semver", false, "Manually select semantic version bump")
 	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, gemini, anthropic, deepseek")
 	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Sub-model for the chosen provider")
-	rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI") // Add review-message flag
+	rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
 
 	rootCmd.AddCommand(reviewCmd)
 }
@@ -194,7 +194,6 @@ func runAICodeReview(cmd *cobra.Command, args []string) {
 	fmt.Println(strings.TrimSpace(reviewResult))
 }
 
-// ... (setupLogger, setupAIEnvironment, validateFlagsAndConfig, isValidProvider, initAIClient, initProviderClient, handleForceCommit, runInteractiveUI, runInteractiveSplit, generateCommitMessage - same as before, no changes)
 func setupLogger() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
