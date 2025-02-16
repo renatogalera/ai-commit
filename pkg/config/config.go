@@ -111,7 +111,6 @@ func LoadOrCreateConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	// If commitTypes are defined in config, set them in committypes package
 	if len(cfg.CommitTypes) > 0 {
 		committypes.SetValidCommitTypes(cfg.CommitTypes)
 	}
@@ -127,7 +126,6 @@ func saveConfig(path string, cfg *Config) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-// ResolveAPIKey returns the API key from flag, environment variable, or config.
 func ResolveAPIKey(flagVal, envVar, configVal, provider string) (string, error) {
 	if strings.TrimSpace(flagVal) != "" {
 		return strings.TrimSpace(flagVal), nil

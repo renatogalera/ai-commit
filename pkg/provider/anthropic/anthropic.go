@@ -20,7 +20,6 @@ func NewAnthropicClient(apiKey, model string) (*AnthropicClient, error) {
 	if apiKey == "" {
 		return nil, errors.New("anthropic API key is required")
 	}
-	// Create a new client using the go-anthropic library.
 	client := anthropicSDK.NewClient(apiKey)
 	if client == nil {
 		return nil, errors.New("failed to create Anthropic client")
@@ -55,7 +54,6 @@ func (ac *AnthropicClient) GetCommitMessage(ctx context.Context, prompt string) 
 	return msg, nil
 }
 
-// SanitizeResponse for Anthropic. Override default if needed.
 func (ac *AnthropicClient) SanitizeResponse(message, commitType string) string {
 	return ac.BaseAIClient.SanitizeResponse(message, commitType)
 }

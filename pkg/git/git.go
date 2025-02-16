@@ -17,13 +17,11 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
-// IsGitRepository checks if the current directory is a Git repository.
 func IsGitRepository(ctx context.Context) bool {
 	_, err := git.PlainOpen(".")
 	return err == nil
 }
 
-// GetGitDiff returns the diff of staged changes.
 func GetGitDiff(ctx context.Context) (string, error) {
 	repo, err := git.PlainOpen(".")
 	if err != nil {
@@ -124,7 +122,6 @@ func getDiffAgainstEmpty(repo *git.Repository) (string, error) {
 	return diffResult.String(), nil
 }
 
-// isBinary checks if the data is likely binary using net/http.DetectContentType.
 func isBinary(data []byte) bool {
 	contentType := http.DetectContentType(data)
 	return strings.HasPrefix(contentType, "image/") ||
@@ -136,7 +133,6 @@ func isBinary(data []byte) bool {
 		strings.Contains(contentType, "font")
 }
 
-// AddGitmoji adds an emoji based on commit type.
 func AddGitmoji(message, commitType string) string {
 	if commitType == "" {
 		lowerMsg := strings.ToLower(message)
@@ -188,8 +184,6 @@ func AddGitmoji(message, commitType string) string {
 	return fmt.Sprintf("%s: %s", prefix, message)
 }
 
-// PrependCommitType ensures the commit type prefix is added to the message.
-// If withEmoji is true, it uses AddGitmoji; otherwise, it simply prepends the type.
 func PrependCommitType(message, commitType string, withEmoji bool) string {
 	if commitType == "" {
 		return message
@@ -204,7 +198,6 @@ func PrependCommitType(message, commitType string, withEmoji bool) string {
 	return fmt.Sprintf("%s: %s", commitType, message)
 }
 
-// GetHeadCommitMessage returns the HEAD commit message.
 func GetHeadCommitMessage(ctx context.Context) (string, error) {
 	repo, err := git.PlainOpen(".")
 	if err != nil {
@@ -221,7 +214,6 @@ func GetHeadCommitMessage(ctx context.Context) (string, error) {
 	return strings.TrimSpace(commit.Message), nil
 }
 
-// GetCurrentBranch returns the current Git branch name.
 func GetCurrentBranch(ctx context.Context) (string, error) {
 	repo, err := git.PlainOpen(".")
 	if err != nil {
@@ -234,10 +226,9 @@ func GetCurrentBranch(ctx context.Context) (string, error) {
 	return headRef.Name().Short(), nil
 }
 
-// FilterLockFiles filters out diffs for specified lock files.
 func FilterLockFiles(diff string, lockFiles []string) string {
 	if len(lockFiles) == 0 {
-		return diff // Return original diff if no lock files specified.
+		return diff
 	}
 	lines := strings.Split(diff, "\n")
 	var filtered []string
