@@ -47,10 +47,17 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "ai-commit",
-	Short: "AI-Commit: Generate Git commit messages with AI",
-	Long: `AI-Commit is a CLI tool that generates commit messages using AI providers like OpenAI, Gemini, Anthropic, and Deepseek.
-It helps you write better commit messages following the Conventional Commits standard.`,
+	Short: "AI-Commit: Generate Git commit messages and review code with AI",
+	Long: `AI-Commit is a CLI tool that generates commit messages and reviews code using AI providers.
+It helps you write better commits and get basic AI-powered code reviews.`,
 	Run: runAiCommit,
+}
+
+var reviewCmd = &cobra.Command{
+	Use:   "review",
+	Short: "Review code changes using AI",
+	Long:  "Send the current Git diff to AI for a basic code review and get suggestions.",
+	Run:   runAiCodeReview,
 }
 
 func init() {
@@ -68,6 +75,8 @@ func init() {
 	rootCmd.Flags().BoolVar(&manualSemverFlag, "manual-semver", false, "Manually select semantic version bump")
 	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, gemini, anthropic, deepseek")
 	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Sub-model for the chosen provider")
+
+	rootCmd.AddCommand(reviewCmd)
 }
 
 func main() {
@@ -125,7 +134,7 @@ func runAiCommit(cmd *cobra.Command, args []string) {
 		os.Exit(0)
 	}
 
-	promptText := prompt.BuildPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate)
+	promptText := prompt.BuildCommitPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate)
 
 	commitMsg, err := generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, emojiFlag)
 	if err != nil {
@@ -141,19 +150,85 @@ func runAiCommit(cmd *cobra.Command, args []string) {
 	runInteractiveUI(ctx, commitMsg, diff, promptText, aiClient)
 }
 
+func runAiCodeReview(cmd *cobra.Command, args []string) {
+	setupLogger()
+
+	cfg, err := loadConfiguration()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to load configuration")
+		os.Exit(1)
+	}
+
+	if err := validateFlagsAndConfig(cfg); err != nil {
+		log.Error().Err(err).Msg("Configuration validation failed")
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	aiClient, err := initAIClient(ctx, cfg)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize AI client")
+		os.Exit(1)
+	}
+
+	if !git.IsGitRepository(ctx) {
+		log.Fatal().Msg("Not a valid Git repository")
+		os.Exit(1)
+	}
+
+	diff, err := git.GetGitDiff(ctx)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to get Git diff for review")
+		os.Exit(1)
+	}
+
+	if strings.TrimSpace(diff) == "" {
+		fmt.Println("No staged changes found for code review.")
+		os.Exit(0)
+	}
+
+	reviewPrompt := prompt.BuildCodeReviewPrompt(diff, languageFlag, cfg.PromptTemplate)
+	reviewResult, err := aiClient.GetCommitMessage(ctx, reviewPrompt)
+	if err != nil {
+		log.Error().Err(err).Msg("Code review generation failed")
+		os.Exit(1)
+	}
+
+	fmt.Println("\nAI Code Review Suggestions:")
+	fmt.Println(strings.TrimSpace(reviewResult))
+}
+
 func setupLogger() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 }
 
 func loadConfiguration() (*config.Config, error) {
-	// [Lógica de carregamento do config, sem alterações]
 	return config.LoadOrCreateConfig()
 }
 
 func validateFlagsAndConfig(cfg *config.Config) error {
-	// [Validação de flags e config, sem alterações]
+	if cfg.Provider == "" {
+		cfg.Provider = config.DefaultProvider
+	}
+	if !isValidProvider(cfg.Provider) {
+		return fmt.Errorf("invalid provider: %s", cfg.Provider)
+	}
+	if commitTypeFlag != "" && !committypes.IsValidCommitType(commitTypeFlag) {
+		return fmt.Errorf("invalid commit type: %s", commitTypeFlag)
+	}
 	return cfg.Validate()
+}
+
+func isValidProvider(provider string) bool {
+	switch provider {
+	case "openai", "gemini", "anthropic", "deepseek":
+		return true
+	default:
+		return false
+	}
 }
 
 func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) {
@@ -168,7 +243,6 @@ func initProviderClient(ctx context.Context, provider string, cfg *config.Config
 			return nil, err
 		}
 		return openai.NewOpenAIClient(key, cfg.OpenAIModel), nil
-
 	case "gemini":
 		key, err := config.ResolveAPIKey(cfg.GeminiAPIKey, "GEMINI_API_KEY", cfg.GeminiAPIKey, "gemini")
 		if err != nil {
@@ -179,7 +253,6 @@ func initProviderClient(ctx context.Context, provider string, cfg *config.Config
 			return nil, fmt.Errorf("failed to initialize Gemini client: %w", err)
 		}
 		return gemini.NewClient(geminiClient), nil
-
 	case "anthropic":
 		key, err := config.ResolveAPIKey(cfg.AnthropicAPIKey, "ANTHROPIC_API_KEY", cfg.AnthropicAPIKey, "anthropic")
 		if err != nil {
@@ -190,7 +263,6 @@ func initProviderClient(ctx context.Context, provider string, cfg *config.Config
 			return nil, fmt.Errorf("failed to initialize Anthropic client: %w", err)
 		}
 		return anthroClient, nil
-
 	case "deepseek":
 		key, err := config.ResolveAPIKey(cfg.DeepseekAPIKey, "DEEPSEEK_API_KEY", cfg.DeepseekAPIKey, "deepseek")
 		if err != nil {
@@ -201,7 +273,6 @@ func initProviderClient(ctx context.Context, provider string, cfg *config.Config
 			return nil, fmt.Errorf("failed to initialize Deepseek client: %w", err)
 		}
 		return deepseekClient, nil
-
 	default:
 		return nil, fmt.Errorf("invalid provider specified: %s", provider)
 	}
@@ -257,18 +328,15 @@ func runInteractiveUI(ctx context.Context, commitMsg string, diff string, prompt
 	}
 }
 
-// generateCommitMessage handles AI commit message generation and post-processing.
 func generateCommitMessage(ctx context.Context, client ai.AIClient, promptText, commitType, tmpl string, enableEmoji bool) (string, error) {
 	msg, err := client.GetCommitMessage(ctx, promptText)
 	if err != nil {
 		return "", err
 	}
-	// If commitType was not provided, try to infer it from the generated message.
 	if commitType == "" {
 		commitType = committypes.GuessCommitType(msg)
 	}
-	msg = client.SanitizeResponse(msg, commitType) // Corrected SanitizeResponse call (method on client)
-	// Always prepend commit type if available.
+	msg = client.SanitizeResponse(msg, commitType)
 	if commitType != "" {
 		msg = git.PrependCommitType(msg, commitType, enableEmoji)
 	}

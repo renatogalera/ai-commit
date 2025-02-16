@@ -298,7 +298,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinner = spinner.New()
 				m.spinner.Spinner = spinner.Dot
 				m.regenCount++
-				m.prompt = prompt.BuildPrompt(m.diff, m.language, m.commitType, "", "") // Use empty string for promptTemplate
+				m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, "", "") // Use empty string for promptTemplate
 				return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 			}
 
@@ -331,7 +331,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinner = spinner.New()
 				m.spinner.Spinner = spinner.Dot
 				m.regenCount++
-				m.prompt = prompt.BuildPrompt(m.diff, m.language, m.commitType, userPrompt, "") // Empty template for prompt edit
+				m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, userPrompt, "") // Empty template for prompt edit
 				return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 			}
 			return m, cmd

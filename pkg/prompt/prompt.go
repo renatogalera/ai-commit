@@ -28,7 +28,22 @@ Here is the diff:
 {ADDITIONAL_CONTEXT}
 `
 
-func BuildPrompt(diff, language, commitType, additionalText, promptTemplate string) string {
+// DefaultCodeReviewPromptTemplate template for code review prompts
+const DefaultCodeReviewPromptTemplate = `Review the following code diff for potential issues, and provide suggestions, following these rules:
+- Identify potential style issues, refactoring opportunities, and basic security risks if any.
+- Focus on code quality and best practices.
+- Provide concise suggestions in bullet points, prefixed with "- ".
+- Be direct and avoid extraneous conversational text.
+- Assume the perspective of a code reviewer offering constructive feedback to a developer.
+- If no issues are found, explicitly state "No issues found."
+- Language of the response MUST be {LANGUAGE}.
+
+Diff:
+{DIFF}
+`
+
+// BuildCommitPrompt ...
+func BuildCommitPrompt(diff, language, commitType, additionalText, promptTemplate string) string {
 	var sb strings.Builder
 
 	finalTemplate := promptTemplate
@@ -50,6 +65,22 @@ func BuildPrompt(diff, language, commitType, additionalText, promptTemplate stri
 		additionalContextStr = "\n\n[Additional context provided by user]\n" + additionalText
 	}
 	promptText = strings.ReplaceAll(promptText, "{ADDITIONAL_CONTEXT}", additionalContextStr)
+
+	sb.WriteString(promptText)
+	return sb.String()
+}
+
+// BuildCodeReviewPrompt ...
+func BuildCodeReviewPrompt(diff, language string, promptTemplate string) string {
+	var sb strings.Builder
+
+	finalTemplate := promptTemplate
+	if finalTemplate == "" {
+		finalTemplate = DefaultCodeReviewPromptTemplate
+	}
+
+	promptText := strings.ReplaceAll(finalTemplate, "{LANGUAGE}", language)
+	promptText = strings.ReplaceAll(promptText, "{DIFF}", diff)
 
 	sb.WriteString(promptText)
 	return sb.String()
