@@ -68,11 +68,6 @@ var (
 			Margin(1, 1).
 			Width(30)
 
-	footerStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("236")).
-			Foreground(lipgloss.Color("252")).
-			Padding(0, 1)
-
 	highlightStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("212")).
 			Bold(true)
@@ -618,36 +613,5 @@ func viewDiffCmd(diff string) tea.Cmd {
 	return func() tea.Msg {
 		// Could do diff processing here if needed in future, now just message
 		return viewDiffMsg{} // Send message to update state and view
-	}
-}
-
-// guessCommitTypeFromMessage tries to detect a commit type from the message
-// if the user hasn't specified one.
-func guessCommitTypeFromMessage(msg string) string {
-	lower := strings.ToLower(msg)
-
-	// Put "feat" above "fix" so it's matched first if both strings appear
-	switch {
-	case strings.Contains(lower, "feat"), strings.Contains(lower, "add"),
-		strings.Contains(lower, "create"), strings.Contains(lower, "introduce"):
-		return "feat"
-	case strings.Contains(lower, "fix"):
-		return "fix"
-	case strings.Contains(lower, "doc"):
-		return "docs"
-	case strings.Contains(lower, "refactor"):
-		return "refactor"
-	case strings.Contains(lower, "test"):
-		return "test"
-	case strings.Contains(lower, "perf"):
-		return "perf"
-	case strings.Contains(lower, "build"):
-		return "build"
-	case strings.Contains(lower, "ci"):
-		return "ci"
-	case strings.Contains(lower, "chore"):
-		return "chore"
-	default:
-		return ""
 	}
 }
