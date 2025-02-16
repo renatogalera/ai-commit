@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	gogitobj "github.com/go-git/go-git/v5/plumbing/object"
+
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 )
 
@@ -52,6 +54,44 @@ Commit Message to Review:
 
 Language for feedback MUST be {LANGUAGE}.
 `
+
+const defaultCommitSummaryTemplate = `Summarize the following git commit in markdown format.
+Use "###" to denote section titles. Include:
+
+### General Summary
+- Main purpose or key changes
+
+### Detailed Changes
+- Any noteworthy details (e.g., new features, bug fixes, refactors)
+
+### Impact and Considerations
+- Overview of how it affects the codebase and any considerations.
+
+Commit Information:
+Author: {AUTHOR}
+Date: {DATE}
+Commit Message:
+{COMMIT_MSG}
+
+Diff:
+{DIFF}
+`
+
+// buildCommitSummaryPrompt constructs the prompt used to ask the AI for a summary.
+func BuildCommitSummaryPrompt(commit *gogitobj.Commit, diffStr, customPromptTemplate string) string {
+
+	templateUsed := defaultCommitSummaryTemplate
+	if strings.TrimSpace(customPromptTemplate) != "" {
+		templateUsed = customPromptTemplate
+	}
+
+	promptText := strings.ReplaceAll(templateUsed, "{AUTHOR}", commit.Author.Name)
+	promptText = strings.ReplaceAll(promptText, "{DATE}", commit.Author.When.Format("Mon Jan 2 15:04:05 MST 2006"))
+	promptText = strings.ReplaceAll(promptText, "{COMMIT_MSG}", commit.Message)
+	promptText = strings.ReplaceAll(promptText, "{DIFF}", diffStr)
+
+	return promptText
+}
 
 // BuildCommitPrompt builds the prompt for commit message generation.
 func BuildCommitPrompt(diff string, language string, commitType string, additionalText string, promptTemplate string) string {
