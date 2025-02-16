@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http" // Import net/http for DetectContentType
+	"net/http"
 	"os"
 	"regexp"
 	"strings"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/config"
 	"github.com/sergi/go-diff/diffmatchpatch"
@@ -133,69 +134,38 @@ func isBinary(data []byte) bool {
 		strings.Contains(contentType, "font")
 }
 
-func AddGitmoji(message, commitType string) string {
-	if commitType == "" {
-		lowerMsg := strings.ToLower(message)
-		switch {
-		case strings.Contains(lowerMsg, "fix"):
-			commitType = "fix"
-		case strings.Contains(lowerMsg, "add"), strings.Contains(lowerMsg, "create"), strings.Contains(lowerMsg, "introduce"):
-			commitType = "feat"
-		case strings.Contains(lowerMsg, "doc"):
-			commitType = "docs"
-		case strings.Contains(lowerMsg, "refactor"):
-			commitType = "refactor"
-		case strings.Contains(lowerMsg, "test"):
-			commitType = "test"
-		case strings.Contains(lowerMsg, "perf"):
-			commitType = "perf"
-		case strings.Contains(lowerMsg, "build"):
-			commitType = "build"
-		case strings.Contains(lowerMsg, "ci"):
-			commitType = "ci"
-		case strings.Contains(lowerMsg, "chore"):
-			commitType = "chore"
-		}
-	}
-	if commitType == "" {
-		return message
-	}
-	gitmojis := map[string]string{
-		"feat":     "✨",
-		"fix":      "🐛",
-		"docs":     "📚",
-		"style":    "💎",
-		"refactor": "♻️",
-		"test":     "🧪",
-		"chore":    "🔧",
-		"perf":     "🚀",
-		"build":    "📦",
-		"ci":       "👷",
-	}
-	prefix := commitType
-	if emoji, ok := gitmojis[commitType]; ok {
-		prefix = fmt.Sprintf("%s %s", emoji, commitType)
-	}
-	emojiPattern := committypes.BuildRegexPatternWithEmoji()
-	if matches := emojiPattern.FindStringSubmatch(message); len(matches) > 0 {
-		message = emojiPattern.ReplaceAllString(message, "")
-		return fmt.Sprintf("%s: %s", prefix, strings.TrimSpace(message))
-	}
-	return fmt.Sprintf("%s: %s", prefix, message)
-}
-
+// PrependCommitType checks if we want to add an emoji (based on config) and/or commitType:
+// e.g., "fix: some text" or "🐛 fix: some text".
 func PrependCommitType(message, commitType string, withEmoji bool) string {
 	if commitType == "" {
 		return message
 	}
-	// Remove any existing commit type prefix.
+	// Remove any existing commit type prefix (with or without emoji).
 	regex := committypes.BuildRegexPatternWithEmoji()
 	message = regex.ReplaceAllString(message, "")
 	message = strings.TrimSpace(message)
+
 	if withEmoji {
 		return AddGitmoji(message, commitType)
 	}
 	return fmt.Sprintf("%s: %s", commitType, message)
+}
+
+func AddGitmoji(message, commitType string) string {
+	if commitType == "" {
+		return message
+	}
+	emoji := committypes.GetEmojiForType(commitType)
+	prefix := commitType
+	if emoji != "" {
+		prefix = fmt.Sprintf("%s %s", emoji, commitType)
+	}
+	// If there's already a commit type prefix, remove it
+	emojiPattern := committypes.BuildRegexPatternWithEmoji()
+	if matches := emojiPattern.FindStringSubmatch(message); len(matches) > 0 {
+		message = emojiPattern.ReplaceAllString(message, "")
+	}
+	return fmt.Sprintf("%s: %s", prefix, strings.TrimSpace(message))
 }
 
 func GetHeadCommitMessage(ctx context.Context) (string, error) {

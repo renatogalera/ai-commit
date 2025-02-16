@@ -8,8 +8,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"gopkg.in/yaml.v3"
-
-	"github.com/renatogalera/ai-commit/pkg/committypes"
 )
 
 const (
@@ -18,7 +16,7 @@ const (
 	DefaultGeminiModel    = "models/gemini-2.0-flash"
 	DefaultAnthropicModel = "claude-3-5-sonnet-latest"
 	DefaultDeepseekModel  = "deepseek-chat"
-	DefaultPhindModel     = "Phind-70B" // Valor padrão para o modelo phind
+	DefaultPhindModel     = "Phind-70B"
 )
 
 var (
@@ -26,16 +24,24 @@ var (
 	DefaultAuthorEmail = "ai-commit@example.com"
 )
 
+// CommitTypeConfig holds a commit type + its optional emoji.
+// This is loaded from config.yaml so we can easily add/delete as needed.
+type CommitTypeConfig struct {
+	Type  string `yaml:"type,omitempty"`
+	Emoji string `yaml:"emoji,omitempty"`
+}
+
 type Config struct {
-	Prompt           string   `yaml:"prompt,omitempty"`
-	CommitType       string   `yaml:"commitType,omitempty"`
-	Template         string   `yaml:"template,omitempty"`
-	SemanticRelease  bool     `yaml:"semanticRelease,omitempty"`
-	InteractiveSplit bool     `yaml:"interactiveSplit,omitempty"`
-	EnableEmoji      bool     `yaml:"enableEmoji,omitempty"`
-	Provider         string   `yaml:"provider,omitempty" validate:"omitempty,oneof=openai gemini anthropic deepseek phind"`
-	CommitTypes      []string `yaml:"commitTypes,omitempty"`
-	LockFiles        []string `yaml:"lockFiles,omitempty"`
+	Prompt           string `yaml:"prompt,omitempty"`
+	CommitType       string `yaml:"commitType,omitempty"`
+	Template         string `yaml:"template,omitempty"`
+	SemanticRelease  bool   `yaml:"semanticRelease,omitempty"`
+	InteractiveSplit bool   `yaml:"interactiveSplit,omitempty"`
+	EnableEmoji      bool   `yaml:"enableEmoji,omitempty"`
+	Provider         string `yaml:"provider,omitempty" validate:"omitempty,oneof=openai gemini anthropic deepseek phind"`
+	// Instead of a simple []string, we store an array of objects with {type, emoji}
+	CommitTypes []CommitTypeConfig `yaml:"commitTypes,omitempty"`
+	LockFiles   []string           `yaml:"lockFiles,omitempty"`
 
 	OpenAIAPIKey    string `yaml:"openAiApiKey,omitempty"`
 	OpenAIModel     string `yaml:"openaiModel,omitempty"`
@@ -45,8 +51,8 @@ type Config struct {
 	AnthropicModel  string `yaml:"anthropicModel,omitempty"`
 	DeepseekAPIKey  string `yaml:"deepseekApiKey,omitempty"`
 	DeepseekModel   string `yaml:"deepseekModel,omitempty"`
-	PhindAPIKey     string `yaml:"phindApiKey,omitempty"` // Novo campo para Phind
-	PhindModel      string `yaml:"phindModel,omitempty"`  // Novo campo para Phind
+	PhindAPIKey     string `yaml:"phindApiKey,omitempty"`
+	PhindModel      string `yaml:"phindModel,omitempty"`
 	PromptTemplate  string `yaml:"promptTemplate,omitempty"`
 
 	AuthorName  string `yaml:"authorName,omitempty"`
@@ -77,28 +83,34 @@ func LoadOrCreateConfig() (*Config, error) {
 	// If config file does not exist, create a default config.
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultCfg := &Config{
-			Prompt:           "",
-			CommitType:       "",
-			Template:         "",
-			SemanticRelease:  false,
-			InteractiveSplit: false,
-			EnableEmoji:      false,
-			Provider:         DefaultProvider,
-			OpenAIAPIKey:     "",
-			OpenAIModel:      DefaultOpenAIModel,
-			GeminiAPIKey:     "",
-			GeminiModel:      DefaultGeminiModel,
-			AnthropicAPIKey:  "",
-			AnthropicModel:   DefaultAnthropicModel,
-			DeepseekAPIKey:   "",
-			DeepseekModel:    DefaultDeepseekModel,
-			PhindAPIKey:      "", // Valor padrão vazio para phind
-			PhindModel:       DefaultPhindModel,
-			AuthorName:       DefaultAuthorName,
-			AuthorEmail:      DefaultAuthorEmail,
-			CommitTypes:      committypes.AllTypes(),       // Default commit types in config
-			LockFiles:        []string{"go.mod", "go.sum"}, // Default lock files
-			PromptTemplate:   "",                           // Default prompt template empty
+			Provider:        DefaultProvider,
+			OpenAIAPIKey:    "",
+			OpenAIModel:     DefaultOpenAIModel,
+			GeminiAPIKey:    "",
+			GeminiModel:     DefaultGeminiModel,
+			AnthropicAPIKey: "",
+			AnthropicModel:  DefaultAnthropicModel,
+			DeepseekAPIKey:  "",
+			DeepseekModel:   DefaultDeepseekModel,
+			PhindAPIKey:     "",
+			PhindModel:      DefaultPhindModel,
+			AuthorName:      DefaultAuthorName,
+			AuthorEmail:     DefaultAuthorEmail,
+			LockFiles:       []string{"go.mod", "go.sum"},
+			// Default commit types and emojis:
+			CommitTypes: []CommitTypeConfig{
+				{Type: "feat", Emoji: "✨"},
+				{Type: "fix", Emoji: "🐛"},
+				{Type: "docs", Emoji: "📚"},
+				{Type: "style", Emoji: "💎"},
+				{Type: "refactor", Emoji: "♻️"},
+				{Type: "test", Emoji: "🧪"},
+				{Type: "chore", Emoji: "🔧"},
+				{Type: "perf", Emoji: "🚀"},
+				{Type: "build", Emoji: "📦"},
+				{Type: "ci", Emoji: "👷"},
+			},
+			PromptTemplate: "",
 		}
 		if err := saveConfig(configPath, defaultCfg); err != nil {
 			return nil, fmt.Errorf("failed to create default config: %w", err)
@@ -113,10 +125,6 @@ func LoadOrCreateConfig() (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
-	}
-
-	if len(cfg.CommitTypes) > 0 {
-		committypes.SetValidCommitTypes(cfg.CommitTypes)
 	}
 
 	return &cfg, nil
@@ -140,7 +148,7 @@ func ResolveAPIKey(flagVal, envVar, configVal, provider string) (string, error) 
 	if strings.TrimSpace(configVal) != "" {
 		return strings.TrimSpace(configVal), nil
 	}
-	// For providers like phind that accept an empty API key, do not return error.
+	// For providers like phind that can accept an empty API key, do not return error if empty.
 	if provider == "phind" {
 		return "", nil
 	}
@@ -151,11 +159,6 @@ func (cfg *Config) Validate() error {
 	v := validator.New()
 	err := v.Struct(cfg)
 	if err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			for _, e := range validationErrs {
-				return fmt.Errorf("config validation failed on field '%s': %w", e.Field(), e)
-			}
-		}
 		return fmt.Errorf("config validation failed: %w", err)
 	}
 	return nil
