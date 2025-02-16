@@ -64,7 +64,6 @@ deepseekModel: "deepseek-chat"
 semanticRelease: false
 interactiveSplit: false
 enableEmoji: false
-commitType: ""
 template: ""
 promptTemplate: "" # Customize the AI prompt template for commit messages and reviews
 commitTypes: # Define your project's accepted commit types

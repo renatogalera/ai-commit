@@ -39,9 +39,6 @@ func TypesRegexPattern() string {
 	return strings.Join(validTypes, "|")
 }
 
-// GuessCommitType tenta identificar o tipo de commit a partir do conteúdo da mensagem.
-// Caso a mensagem contenha palavras-chave que indiquem uma feature, bugfix, etc.,
-// retorna o tipo correspondente; caso contrário, retorna uma string vazia.
 func GuessCommitType(message string) string {
 	lower := strings.ToLower(message)
 	switch {
