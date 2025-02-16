@@ -392,25 +392,6 @@ func enforceCommitMessageStyle(
 	return strings.TrimSpace(styleReviewResult), nil
 }
 
-// handle non-interactive commit flow
-func handleForceCommit(ctx context.Context, commitMsg string, aiClient ai.AIClient) {
-	if strings.TrimSpace(commitMsg) == "" {
-		log.Fatal().Msg("Generated commit message is empty; aborting commit.")
-	}
-
-	if err := git.CommitChanges(ctx, commitMsg); err != nil {
-		log.Fatal().Err(err).Msg("Commit failed")
-	}
-	fmt.Println("Commit created successfully (forced).")
-
-	if semanticReleaseFlag {
-		if err := versioner.PerformSemanticRelease(ctx, aiClient, commitMsg, manualSemverFlag); err != nil {
-			log.Fatal().Err(err).Msg("Semantic release failed")
-		}
-	}
-}
-
-// runInteractiveUI starts the TUI flow, passing style review suggestions for display
 func runInteractiveUI(
 	ctx context.Context,
 	commitMsg string,
