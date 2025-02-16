@@ -32,10 +32,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
       - name: Install Goreleaser
-        run: |
-          curl -sL https://install.goreleaser.com | bash
-
-      - name: Run Goreleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: goreleaser release --clean
