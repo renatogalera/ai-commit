@@ -13,13 +13,8 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/renatogalera/ai-commit/pkg/committypes"
+	"github.com/renatogalera/ai-commit/pkg/config"
 	"github.com/sergi/go-diff/diffmatchpatch"
-)
-
-// Global variables for commit author details.
-var (
-	CommitAuthorName  = "ai-commit"
-	CommitAuthorEmail = "ai-commit@example.com"
 )
 
 // IsGitRepository checks if the current directory is a Git repository.
@@ -282,8 +277,8 @@ func CommitChanges(ctx context.Context, commitMessage string) error {
 	}
 	_, err = worktree.Commit(commitMessage, &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  CommitAuthorName,
-			Email: CommitAuthorEmail,
+			Name:  config.DefaultAuthorName,
+			Email: config.DefaultAuthorEmail,
 			When:  time.Now(),
 		},
 	})

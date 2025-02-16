@@ -13,7 +13,7 @@ import (
 
 	"github.com/renatogalera/ai-commit/pkg/ai"
 	"github.com/renatogalera/ai-commit/pkg/committypes"
-	"github.com/renatogalera/ai-commit/pkg/config"
+	config "github.com/renatogalera/ai-commit/pkg/config"
 	"github.com/renatogalera/ai-commit/pkg/git"
 	"github.com/renatogalera/ai-commit/pkg/prompt"
 	"github.com/renatogalera/ai-commit/pkg/provider/anthropic"
@@ -224,12 +224,12 @@ func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, 
 	// Check if we're in a valid Git repo
 	if !git.IsGitRepository(ctx) {
 		cancel()
-		return nil, nil, nil, nil, fmt.Errorf(errMsgNotGitRepository)
+		return nil, nil, nil, nil, fmt.Errorf("%s", errMsgNotGitRepository)
 	}
 
 	// Set commit author details
-	git.CommitAuthorName = cfgCopy.AuthorName
-	git.CommitAuthorEmail = cfgCopy.AuthorEmail
+	config.DefaultAuthorName = cfgCopy.AuthorName
+	config.DefaultAuthorEmail = cfgCopy.AuthorEmail
 
 	return ctx, cancel, cfgCopy, aiClient, nil
 }

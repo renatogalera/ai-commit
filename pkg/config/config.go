@@ -19,8 +19,11 @@ const (
 	DefaultGeminiModel    = "models/gemini-2.0-flash"
 	DefaultAnthropicModel = "claude-3-5-sonnet-latest"
 	DefaultDeepseekModel  = "deepseek-chat"
-	DefaultAuthorName     = "ai-commit"
-	DefaultAuthorEmail    = "ai-commit@example.com"
+)
+
+var (
+	DefaultAuthorName  = "ai-commit"
+	DefaultAuthorEmail = "ai-commit@example.com"
 )
 
 // Config holds the configuration for AI‑Commit.
