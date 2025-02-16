@@ -50,7 +50,7 @@ sudo mv ai-commit /usr/local/bin/
 AI-Commit automatically creates a `config.yaml` file at `~/.config/ai-commit/config.yaml` upon first run. This file lets you personalize default settings:
 
 ```yaml
-provider: "openai"
+provider: "phind"
 openAiApiKey: "sk-YOUR-OPENAI-KEY"
 openaiModel: "gpt-4o-latest"
 
