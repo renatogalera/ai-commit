@@ -17,6 +17,7 @@ const DefaultPromptTemplate = `Generate a git commit message following these rul
 - Use the present tense and ensure clarity.
 - Output only the commit message.
 - Do NOT include the commit hash or branch name.
+- Think first, if information is not useful to humans, it is not necessary.
 - When editing the README, ignore the diff and just let us know that it has been updated.
 - Do not repeat topics.
 - Do NOT begin your commit message with the word 'git' or references to it.
