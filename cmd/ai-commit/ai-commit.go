@@ -106,7 +106,9 @@ func main() {
 		log.Error().Err(err).Msg("Failed to get Git diff")
 		os.Exit(1)
 	}
+
 	originalDiff := diff
+
 	diff = git.FilterLockFiles(diff, []string{"go.mod", "go.sum"})
 	if strings.TrimSpace(diff) == "" {
 		fmt.Println("No staged changes found after filtering lock files.")
@@ -116,8 +118,10 @@ func main() {
 		fmt.Println("Note: Lock file changes are not used for AI generation but will be committed.")
 	}
 
-	// Possibly summarize large diffs
-	diff, _ = ai.MaybeSummarizeDiff(diff, 5000)
+	if strings.TrimSpace(diff) == "" {
+		fmt.Println("No staged changes found.")
+		os.Exit(0)
+	}
 
 	// Build AI prompt
 	promptText := prompt.BuildPrompt(diff, *languageFlag, *commitTypeFlag, "")
@@ -186,7 +190,12 @@ func generateCommitMessage(ctx context.Context, client ai.AIClient, promptText, 
 }
 
 // initAIClient initializes the appropriate AI client based on configuration and flags.
-func initAIClient(ctx context.Context, cfg *config.Config, provider, apiKey, model, geminiKey, anthropicKey, deepseekKey string) (ai.AIClient, error) {
+func initAIClient(
+	ctx context.Context,
+	cfg *config.Config,
+	provider, apiKey, model, geminiKey, anthropicKey, deepseekKey string,
+) (ai.AIClient, error) {
+
 	provider = strings.TrimSpace(provider)
 	if provider == "" {
 		provider = cfg.Provider
