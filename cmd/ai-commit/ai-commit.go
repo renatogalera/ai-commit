@@ -29,6 +29,12 @@ import (
 )
 
 var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
+var (
 	apiKeyFlag           string
 	geminiAPIKeyFlag     string
 	anthropicAPIKeyFlag  string
@@ -50,8 +56,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "ai-commit",
 	Short: "AI-Commit: Generate Git commit messages and review code with AI",
-	Long: `AI-Commit is a CLI tool that generates commit messages and reviews code using AI providers.
-It helps you write better commits and get basic AI-powered code reviews.`,
+	Long:  "AI-Commit is a CLI tool that generates commit messages and reviews code using AI providers.",
 }
 
 func init() {
@@ -81,30 +86,34 @@ func init() {
 	rootCmd.Flags().BoolVar(&interactiveSplitFlag, "interactive-split", false, "Launch interactive commit splitting")
 	rootCmd.Flags().BoolVar(&emojiFlag, "emoji", false, "Include emoji in commit message")
 	rootCmd.Flags().BoolVar(&manualSemverFlag, "manual-semver", false, "Manually select semantic version bump")
-	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, gemini, anthropropic, deepseek, phind")
+	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, gemini, anthropic, deepseek, phind")
 	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Sub-model for the chosen provider")
 	rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
 
-	// Register additional commands.
 	rootCmd.AddCommand(newSummarizeCmd(setupAIEnvironment))
 	rootCmd.AddCommand(reviewCmd)
+}
+
+func main() {
+	if len(os.Args) > 1 {
+		arg := os.Args[1]
+		if arg == "--version" || arg == "-v" {
+			fmt.Printf("ai-commit version: %s\ncommit: %s\nbuilt at: %s\n", version, commit, date)
+			return
+		}
+	}
+
+	setupLogger()
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
 
 func setupLogger() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-}
-
-// isValidProvider checks if the user-supplied provider is in our supported set.
-func isValidProvider(provider string) bool {
-	validProviders := map[string]bool{
-		"openai":    true,
-		"gemini":    true,
-		"anthropic": true,
-		"deepseek":  true,
-		"phind":     true,
-	}
-	return validProviders[provider]
 }
 
 func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error) {
@@ -113,7 +122,6 @@ func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, 
 		return nil, nil, nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}
 	cm := config.NewConfigManager(cfg)
-	// register flags, etc...
 	mergedCfg := cm.MergeConfiguration()
 
 	if mergedCfg.Provider == "" {
@@ -125,6 +133,7 @@ func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, 
 	if err := mergedCfg.Validate(); err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("config validation failed: %w", err)
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	committypes.InitCommitTypes(mergedCfg.CommitTypes)
 
@@ -145,99 +154,15 @@ func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, 
 	return ctx, cancel, mergedCfg, aiClient, nil
 }
 
-// runAICommit is your main command entry.
-func runAICommit(cmd *cobra.Command, args []string) {
-	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Setup AI environment error")
-		return
+func isValidProvider(provider string) bool {
+	validProviders := map[string]bool{
+		"openai":    true,
+		"gemini":    true,
+		"anthropic": true,
+		"deepseek":  true,
+		"phind":     true,
 	}
-	defer cancel()
-
-	if interactiveSplitFlag {
-		runInteractiveSplit(ctx, aiClient, semanticReleaseFlag, manualSemverFlag)
-		return
-	}
-
-	// *** CHANGED HERE: we call GetGitDiffIgnoringMoves instead of GetGitDiff ***
-	diff, err := git.GetGitDiffIgnoringMoves(ctx)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get Git diff (ignoring moves)")
-		return
-	}
-
-	diff = git.FilterLockFiles(diff, cfg.LockFiles)
-	if strings.TrimSpace(diff) == "" {
-		fmt.Println("No staged changes after filtering lock files.")
-		return
-	}
-
-	promptText := prompt.BuildCommitPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate)
-	commitMsg, genErr := generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, cfg.EnableEmoji)
-	if genErr != nil {
-		log.Error().Err(genErr).Msg("Commit message generation error")
-		os.Exit(1)
-	}
-
-	var styleReviewSuggestions string
-	if reviewMessageFlag {
-		suggestions, errReview := enforceCommitMessageStyle(ctx, aiClient, commitMsg, languageFlag, cfg.PromptTemplate)
-		if errReview != nil {
-			log.Error().Err(errReview).Msg("Commit message style enforcement failed")
-			os.Exit(1)
-		}
-		styleReviewSuggestions = suggestions
-	}
-
-	if forceFlag {
-		if reviewMessageFlag && strings.TrimSpace(styleReviewSuggestions) != "" &&
-			!strings.Contains(strings.ToLower(styleReviewSuggestions), "no issues found") {
-			fmt.Println("\nAI Commit Message Style Review Suggestions:")
-			fmt.Println(styleReviewSuggestions)
-		}
-		if strings.TrimSpace(commitMsg) == "" {
-			log.Fatal().Msg("Generated commit message is empty; aborting commit.")
-		}
-		if err := git.CommitChanges(ctx, commitMsg); err != nil {
-			log.Fatal().Err(err).Msg("Commit failed")
-		}
-		fmt.Println("Commit created successfully (forced).")
-		if semanticReleaseFlag {
-			if err := versioner.PerformSemanticRelease(ctx, aiClient, commitMsg, manualSemverFlag); err != nil {
-				log.Fatal().Err(err).Msg("Semantic release failed")
-			}
-		}
-		return
-	}
-
-	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, cfg.EnableEmoji, aiClient)
-}
-
-func newSummarizeCmd(setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "summarize",
-		Short: "List commits via fzf, pick one, and summarize the commit with AI",
-		Long: `Displays all commits in a fuzzy finder interface; after selecting a commit,
-ai-commit fetches that commit's diff and calls the AI provider to produce a summary.
-The resulting output is rendered with a beautiful TUI-like style.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			runSummarizeCommand(setupAIEnvironment)
-		},
-	}
-	return cmd
-}
-
-func runSummarizeCommand(setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) {
-	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Setup environment error for summarize command")
-		return
-	}
-	defer cancel()
-
-	if err := summarizer.SummarizeCommits(ctx, aiClient, cfg, languageFlag); err != nil {
-		log.Fatal().Err(err).Msg("Failed to summarize commits")
-	}
+	return validProviders[provider]
 }
 
 func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) {
@@ -309,8 +234,72 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 		}
 		return phind.NewPhindClient(key, model), nil
 	}
-
 	return nil, fmt.Errorf("invalid provider specified: %s", cfg.Provider)
+}
+
+func runAICommit(cmd *cobra.Command, args []string) {
+	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Setup AI environment error")
+		return
+	}
+	defer cancel()
+
+	if interactiveSplitFlag {
+		runInteractiveSplit(ctx, aiClient, semanticReleaseFlag, manualSemverFlag)
+		return
+	}
+
+	diff, err := git.GetGitDiffIgnoringMoves(ctx)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to get Git diff (ignoring moves)")
+		return
+	}
+	diff = git.FilterLockFiles(diff, cfg.LockFiles)
+	if strings.TrimSpace(diff) == "" {
+		fmt.Println("No staged changes after filtering lock files.")
+		return
+	}
+
+	promptText := prompt.BuildCommitPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate)
+	commitMsg, genErr := generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, cfg.EnableEmoji)
+	if genErr != nil {
+		log.Error().Err(genErr).Msg("Commit message generation error")
+		os.Exit(1)
+	}
+
+	var styleReviewSuggestions string
+	if reviewMessageFlag {
+		suggestions, errReview := enforceCommitMessageStyle(ctx, aiClient, commitMsg, languageFlag, cfg.PromptTemplate)
+		if errReview != nil {
+			log.Error().Err(errReview).Msg("Commit message style enforcement failed")
+			os.Exit(1)
+		}
+		styleReviewSuggestions = suggestions
+	}
+
+	if forceFlag {
+		if reviewMessageFlag && strings.TrimSpace(styleReviewSuggestions) != "" &&
+			!strings.Contains(strings.ToLower(styleReviewSuggestions), "no issues found") {
+			fmt.Println("\nAI Commit Message Style Review Suggestions:")
+			fmt.Println(styleReviewSuggestions)
+		}
+		if strings.TrimSpace(commitMsg) == "" {
+			log.Fatal().Msg("Generated commit message is empty; aborting commit.")
+		}
+		if err := git.CommitChanges(ctx, commitMsg); err != nil {
+			log.Fatal().Err(err).Msg("Commit failed")
+		}
+		fmt.Println("Commit created successfully (forced).")
+		if semanticReleaseFlag {
+			if err := versioner.PerformSemanticRelease(ctx, aiClient, commitMsg, manualSemverFlag); err != nil {
+				log.Fatal().Err(err).Msg("Semantic release failed")
+			}
+		}
+		return
+	}
+
+	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, cfg.EnableEmoji, aiClient)
 }
 
 func runAICodeReview(cmd *cobra.Command, args []string) {
@@ -342,51 +331,29 @@ func runAICodeReview(cmd *cobra.Command, args []string) {
 	fmt.Println(strings.TrimSpace(reviewResult))
 }
 
-func generateCommitMessage(
-	ctx context.Context,
-	client ai.AIClient,
-	promptText string,
-	commitType string,
-	tmpl string,
-	enableEmoji bool,
-) (string, error) {
-
-	msg, err := client.GetCommitMessage(ctx, promptText)
-	if err != nil {
-		return "", err
+func newSummarizeCmd(setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "summarize",
+		Short: "List commits via fzf, pick one, and summarize the commit with AI",
+		Long:  "Displays all commits in a fuzzy finder interface, picks one, and calls the AI provider to produce a summary.",
+		Run: func(cmd *cobra.Command, args []string) {
+			runSummarizeCommand(setupAIEnvironment)
+		},
 	}
-
-	if commitType == "" {
-		commitType = committypes.GuessCommitType(msg)
-	}
-	msg = client.SanitizeResponse(msg, commitType)
-
-	if commitType != "" {
-		msg = git.PrependCommitType(msg, commitType, enableEmoji)
-	}
-
-	if tmpl != "" {
-		msg, err = template.ApplyTemplate(tmpl, msg)
-		if err != nil {
-			return "", err
-		}
-	}
-	return strings.TrimSpace(msg), nil
+	return cmd
 }
 
-func enforceCommitMessageStyle(
-	ctx context.Context,
-	client ai.AIClient,
-	commitMsg string,
-	language string,
-	promptTemplate string,
-) (string, error) {
-	reviewPrompt := prompt.BuildCommitStyleReviewPrompt(commitMsg, language, promptTemplate)
-	styleReviewResult, err := client.GetCommitMessage(ctx, reviewPrompt)
+func runSummarizeCommand(setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) {
+	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
 	if err != nil {
-		return "", fmt.Errorf("commit message style review failed: %w", err)
+		log.Fatal().Err(err).Msg("Setup environment error for summarize command")
+		return
 	}
-	return strings.TrimSpace(styleReviewResult), nil
+	defer cancel()
+
+	if err := summarizer.SummarizeCommits(ctx, aiClient, cfg, languageFlag); err != nil {
+		log.Fatal().Err(err).Msg("Failed to summarize commits")
+	}
 }
 
 func runInteractiveUI(
@@ -413,7 +380,6 @@ func runInteractiveUI(
 	if _, err := program.Run(); err != nil {
 		log.Fatal().Err(err).Msg("UI encountered an error")
 	}
-
 	if semanticReleaseFlag {
 		if err := versioner.PerformSemanticRelease(
 			ctx,
@@ -424,6 +390,51 @@ func runInteractiveUI(
 			log.Fatal().Err(err).Msg("Semantic release failed")
 		}
 	}
+}
+
+func generateCommitMessage(
+	ctx context.Context,
+	client ai.AIClient,
+	promptText string,
+	commitType string,
+	tmpl string,
+	enableEmoji bool,
+) (string, error) {
+	msg, err := client.GetCommitMessage(ctx, promptText)
+	if err != nil {
+		return "", err
+	}
+
+	if commitType == "" {
+		commitType = committypes.GuessCommitType(msg)
+	}
+	msg = client.SanitizeResponse(msg, commitType)
+
+	if commitType != "" {
+		msg = git.PrependCommitType(msg, commitType, enableEmoji)
+	}
+	if tmpl != "" {
+		msg, err = template.ApplyTemplate(tmpl, msg)
+		if err != nil {
+			return "", err
+		}
+	}
+	return strings.TrimSpace(msg), nil
+}
+
+func enforceCommitMessageStyle(
+	ctx context.Context,
+	client ai.AIClient,
+	commitMsg string,
+	language string,
+	promptTemplate string,
+) (string, error) {
+	reviewPrompt := prompt.BuildCommitStyleReviewPrompt(commitMsg, language, promptTemplate)
+	styleReviewResult, err := client.GetCommitMessage(ctx, reviewPrompt)
+	if err != nil {
+		return "", fmt.Errorf("commit message style review failed: %w", err)
+	}
+	return strings.TrimSpace(styleReviewResult), nil
 }
 
 func runInteractiveSplit(
@@ -441,13 +452,5 @@ func runInteractiveSplit(
 		if err := versioner.PerformSemanticRelease(ctx, aiClient, headMsg, manualSemverFlag); err != nil {
 			log.Error().Err(err).Msg("Semantic release failed")
 		}
-	}
-}
-
-func main() {
-	setupLogger()
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
 	}
 }

@@ -45,8 +45,6 @@ type (
 	viewDiffMsg struct{}
 )
 
-// --- STYLES ------------------------------------------------------------------
-
 var (
 	logoStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -74,8 +72,6 @@ var (
 	diffStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240"))
 )
-
-// --- KEY MAPPINGS ------------------------------------------------------------
 
 type keys struct {
 	Commit     key.Binding
@@ -127,8 +123,6 @@ var keyMap = keys{
 		key.WithHelp("enter", "commit"),
 	),
 }
-
-// --- MODEL -------------------------------------------------------------------
 
 type Model struct {
 	state       uiState

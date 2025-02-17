@@ -82,7 +82,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selected[i] = true
 			}
 			m.updateSelectedCount() // Update count
-		case "i": // Invert selection
+		case "i":
 			for i := range m.chunks {
 				m.selected[i] = !m.selected[i]
 			}
