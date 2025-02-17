@@ -13,9 +13,12 @@ builds:
       - amd64
       - arm64
     main: ./cmd/ai-commit
+    binary: ai-commit
     ldflags:
       - "-s -w"
-    binary: ai-commit
+      - "-X 'main.version={{.Version}}'"
+      - "-X 'main.commit={{.Commit}}'"
+      - "-X 'main.date={{.Date}}'"
 
 archives:
   - format: tar.gz
