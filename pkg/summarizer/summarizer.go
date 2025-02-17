@@ -17,7 +17,8 @@ import (
 
 // SummarizeCommits lists all commits in the current repository, allows the user to pick one via a fuzzy finder,
 // retrieves its diff, builds an AI prompt, and prints the AI-generated summary.
-func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Config) error {
+// Now receives an extra parameter "language" for the summary prompt.
+func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Config, language string) error {
 	// Open the current git repository.
 	repo, err := gogit.PlainOpen(".")
 	if err != nil {
@@ -59,8 +60,8 @@ func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Con
 		return nil
 	}
 
-	// Build the prompt for the AI using the commit diff.
-	commitSummaryPrompt := prompt.BuildCommitSummaryPrompt(selectedCommit, diffStr, cfg.PromptTemplate)
+	// Build the prompt for the AI using the commit diff and language.
+	commitSummaryPrompt := prompt.BuildCommitSummaryPrompt(selectedCommit, diffStr, cfg.PromptTemplate, language)
 	summary, err := aiClient.GetCommitMessage(ctx, commitSummaryPrompt)
 	if err != nil {
 		return fmt.Errorf("failed to summarize commit with AI: %w", err)
