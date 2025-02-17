@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	DefaultProvider       = "openai"
+	DefaultProvider       = "phind"
 	DefaultOpenAIModel    = "chatgpt-4o-latest"
 	DefaultGeminiModel    = "models/gemini-2.0-flash"
 	DefaultAnthropicModel = "claude-3-5-sonnet-latest"
@@ -32,16 +32,15 @@ type CommitTypeConfig struct {
 }
 
 type Config struct {
-	Prompt           string `yaml:"prompt,omitempty"`
-	CommitType       string `yaml:"commitType,omitempty"`
-	Template         string `yaml:"template,omitempty"`
-	SemanticRelease  bool   `yaml:"semanticRelease,omitempty"`
-	InteractiveSplit bool   `yaml:"interactiveSplit,omitempty"`
-	EnableEmoji      bool   `yaml:"enableEmoji,omitempty"`
-	Provider         string `yaml:"provider,omitempty" validate:"omitempty,oneof=openai gemini anthropic deepseek phind"`
-	// Instead of a simple []string, we store an array of objects with {type, emoji}
-	CommitTypes []CommitTypeConfig `yaml:"commitTypes,omitempty"`
-	LockFiles   []string           `yaml:"lockFiles,omitempty"`
+	Prompt           string             `yaml:"prompt,omitempty"`
+	CommitType       string             `yaml:"commitType,omitempty"`
+	Template         string             `yaml:"template,omitempty"`
+	SemanticRelease  bool               `yaml:"semanticRelease,omitempty"`
+	InteractiveSplit bool               `yaml:"interactiveSplit,omitempty"`
+	EnableEmoji      bool               `yaml:"enableEmoji,omitempty"`
+	Provider         string             `yaml:"provider,omitempty" validate:"omitempty,oneof=openai gemini anthropic deepseek phind"`
+	CommitTypes      []CommitTypeConfig `yaml:"commitTypes,omitempty"`
+	LockFiles        []string           `yaml:"lockFiles,omitempty"`
 
 	OpenAIAPIKey    string `yaml:"openAiApiKey,omitempty"`
 	OpenAIModel     string `yaml:"openaiModel,omitempty"`
