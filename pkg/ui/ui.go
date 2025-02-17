@@ -52,7 +52,7 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color("62"))
 
-	logoText = `AI-COMMIT TUI`
+	logoText = `AI-COMMIT`
 
 	// Where the commit message is shown
 	commitBoxStyle = lipgloss.NewStyle().
