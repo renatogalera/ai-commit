@@ -213,22 +213,25 @@ API Keys via Environment Variables:
     ai-commit --review-message
     ```
     Launches the interactive TUI after generating and AI-reviewing the commit message style.
+
 2.  **Force Commit with Style Review (Non-Interactive)**:
     ```bash
     ai-commit --force --review-message
     ```
     Directly commits staged changes after generating and AI-reviewing the commit message style, skipping the TUI. Style review feedback is printed to the terminal before commit.
-    ```
+
 3.  **AI-Powered Code Review**:
     ```bash
     ai-commit review
     ```
     Executes AI code review and outputs suggestions to the terminal.
+
 4.  **Semantic Release (Manual Version)**:
     ```bash
     ai-commit --semantic-release --manual-semver
     ```
     Semantic release with manual version selection TUI.
+
 5.  **Provider and Model Selection**:
     ```bash
     ai-commit --provider=openai --model=gpt-4 --apiKey=sk-...
@@ -237,16 +240,17 @@ API Keys via Environment Variables:
     ai-commit --provider=deepseek --model=deepseek-chat --deepseekApiKey=...
     ai-commit --provider=phind --model=Phind-70B           # Phind model is currently free; API key is optional
     ```
+
 6.  **Interactive Split Commit**:
     ```bash
     ai-commit --interactive-split
     ```
     Starts interactive split TUI.
 
+
 7.  **Summarize a Commit**:
     ```bash
     ai-commit summarize
     ```
     Lists commits with `fzf`, and after you pick one, shows an AI-generated summary in the terminal.
-
 ---
