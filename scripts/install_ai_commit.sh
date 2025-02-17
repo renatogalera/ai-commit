@@ -2,9 +2,9 @@
 # install_ai_commit.sh
 # This script automatically downloads the latest release of ai-commit from GitHub,
 # detects your OS and CPU architecture, selects the matching asset,
-# downloads it, makes it executable, and installs it to /usr/local/bin.
+# downloads it, extracts it if needed, makes it executable, and installs it to /usr/local/bin.
 #
-# Requirements: curl, jq, and sudo (if not running as root).
+# Requirements: curl, jq, tar, and sudo (if not running as root).
 
 set -euo pipefail
 
@@ -18,15 +18,13 @@ error_exit() {
 }
 
 ###########################################
-# Check for required commands: curl and jq
+# Check for required commands: curl, jq, and tar
 ###########################################
-if ! command -v curl &>/dev/null; then
-    error_exit "curl is not installed. Please install curl."
-fi
-
-if ! command -v jq &>/dev/null; then
-    error_exit "jq is not installed. Please install jq."
-fi
+for cmd in curl jq tar; do
+    if ! command -v "$cmd" &>/dev/null; then
+        error_exit "$cmd is not installed. Please install $cmd."
+    fi
+done
 
 ###########################################
 # Hard-coded GitHub repository details
@@ -117,25 +115,52 @@ fi
 echo "Download completed."
 
 ###########################################
-# Validate the downloaded file and set permissions
+# Check if the asset is a tar.gz (or .tgz) archive.
+# If so, extract it.
 ###########################################
-if [ ! -s "$TMP_FILE" ]; then
-    rm -f "$TMP_FILE"
-    error_exit "Downloaded file is empty."
+BINARY_PATH=""
+if [[ "$ASSET_NAME" =~ \.(tar\.gz|tgz)$ ]]; then
+    echo "Asset is an archive. Extracting..."
+    TMP_DIR=$(mktemp -d /tmp/ai-commit-extract.XXXXXX) || error_exit "Failed to create temporary extraction directory."
+    tar -xzf "$TMP_FILE" -C "$TMP_DIR"
+    # Look for the 'ai-commit' binary (assumed to be at the root or inside one directory)
+    BINARY_PATH=$(find "$TMP_DIR" -type f -name "ai-commit" -perm /111 | head -n 1)
+    if [ -z "$BINARY_PATH" ]; then
+        rm -rf "$TMP_DIR" "$TMP_FILE"
+        error_exit "ai-commit binary not found inside the archive."
+    fi
+    echo "Extracted binary: $BINARY_PATH"
+else
+    # Asset is assumed to be a binary directly.
+    BINARY_PATH="$TMP_FILE"
 fi
 
-chmod +x "$TMP_FILE" || error_exit "Failed to set execute permission on the downloaded file."
+###########################################
+# Validate the binary and set permissions
+###########################################
+if [ ! -s "$BINARY_PATH" ]; then
+    rm -f "$BINARY_PATH" "$TMP_FILE"
+    error_exit "Downloaded binary is empty."
+fi
+
+chmod +x "$BINARY_PATH" || error_exit "Failed to set execute permission on the binary."
 
 ###########################################
-# Install the asset to /usr/local/bin
+# Install the binary to /usr/local/bin
 ###########################################
 DESTINATION="/usr/local/bin/ai-commit"
 echo "Installing to ${DESTINATION}..."
 
 if [ "$EUID" -ne 0 ]; then
-    sudo mv "$TMP_FILE" "$DESTINATION" || { rm -f "$TMP_FILE"; error_exit "Failed to move file to ${DESTINATION}."; }
+    sudo mv "$BINARY_PATH" "$DESTINATION" || { rm -f "$BINARY_PATH"; error_exit "Failed to move file to ${DESTINATION}."; }
 else
-    mv "$TMP_FILE" "$DESTINATION" || { rm -f "$TMP_FILE"; error_exit "Failed to move file to ${DESTINATION}."; }
+    mv "$BINARY_PATH" "$DESTINATION" || { rm -f "$BINARY_PATH"; error_exit "Failed to move file to ${DESTINATION}."; }
+fi
+
+# Clean up temporary files and directories
+rm -f "$TMP_FILE"
+if [ -n "${TMP_DIR:-}" ]; then
+    rm -rf "$TMP_DIR"
 fi
 
 echo "Installation complete. 'ai-commit' is now available in /usr/local/bin."
