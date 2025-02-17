@@ -77,7 +77,15 @@ sudo mv ai-commit /usr/local/bin/
 AI-Commit automatically creates a `config.yaml` file at `~/.config/ai-commit/config.yaml` upon first run. This file lets you personalize default settings:
 
 ```yaml
+# Your name and email address for git commits.
+authorName: "Your Name"
+authorEmail: "youremail@example.com"
+
 provider: "phind"
+
+phindApiKey: ""             # Phind does not require an API key by default
+phindModel: "Phind-70B"      # Current Phind model is free
+
 openAiApiKey: "sk-YOUR-OPENAI-KEY"
 openaiModel: "gpt-4o-latest"
 
@@ -89,9 +97,6 @@ anthropicModel: "claude-3-5-sonnet-latest"
 
 deepseekApiKey: "YOUR-DEEPSEEK-KEY"
 deepseekModel: "deepseek-chat"
-
-phindApiKey: ""             # Phind does not require an API key by default
-phindModel: "Phind-70B"      # Current Phind model is free
 
 semanticRelease: false
 interactiveSplit: false
