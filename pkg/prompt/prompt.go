@@ -56,10 +56,11 @@ Commit Message to Review:
 Language for feedback MUST be {LANGUAGE}.
 `
 
-// defaultCommitSummaryTemplate is used to generate a summary of the git commit in markdown format.
+// Updated defaultCommitSummaryTemplate to include language placeholder.
 const defaultCommitSummaryTemplate = `Summarize the following git commit in markdown format.
-Use "###" to denote section titles. Include:
+Write the summary in {LANGUAGE}.
 
+Use "###" to denote section titles. Include:
 
 Rule 1: don't send any text other than the request, don't say you're sending markdown or anything
 Rule 2 send everything from General Summary and nothing else
@@ -86,7 +87,7 @@ Diff:
 
 // BuildCommitSummaryPrompt constructs the prompt used to ask the AI for a commit summary.
 // It replaces placeholders with actual commit information and the diff string.
-func BuildCommitSummaryPrompt(commit *gogitobj.Commit, diffStr, customPromptTemplate string) string {
+func BuildCommitSummaryPrompt(commit *gogitobj.Commit, diffStr, customPromptTemplate, language string) string {
 	templateUsed := defaultCommitSummaryTemplate
 	if strings.TrimSpace(customPromptTemplate) != "" {
 		templateUsed = customPromptTemplate
@@ -96,6 +97,7 @@ func BuildCommitSummaryPrompt(commit *gogitobj.Commit, diffStr, customPromptTemp
 	promptText = strings.ReplaceAll(promptText, "{DATE}", commit.Author.When.Format("Mon Jan 2 15:04:05 MST 2006"))
 	promptText = strings.ReplaceAll(promptText, "{COMMIT_MSG}", commit.Message)
 	promptText = strings.ReplaceAll(promptText, "{DIFF}", diffStr)
+	promptText = strings.ReplaceAll(promptText, "{LANGUAGE}", language)
 
 	return promptText
 }

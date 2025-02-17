@@ -67,13 +67,15 @@ var reviewCmd = &cobra.Command{
 
 func init() {
 	// Define CLI flags.
+	// Para que o flag --language seja herdado por todos os subcomandos, usamos PersistentFlags().
+	rootCmd.PersistentFlags().StringVar(&languageFlag, "language", "english", "Language for commit message/review")
+
 	rootCmd.Flags().StringVar(&apiKeyFlag, "apiKey", "", "API key for OpenAI provider (or env OPENAI_API_KEY)")
 	rootCmd.Flags().StringVar(&geminiAPIKeyFlag, "geminiApiKey", "", "API key for Gemini provider (or env GEMINI_API_KEY)")
 	rootCmd.Flags().StringVar(&anthropicAPIKeyFlag, "anthropicApiKey", "", "API key for Anthropic provider (or env ANTHROPIC_API_KEY)")
 	rootCmd.Flags().StringVar(&deepseekAPIKeyFlag, "deepseekApiKey", "", "API key for Deepseek provider (or env DEEPSEEK_API_KEY)")
 	rootCmd.Flags().StringVar(&phindAPIKeyFlag, "phindApiKey", "", "API key for Phind provider (or env PHIND_API_KEY)")
 
-	rootCmd.Flags().StringVar(&languageFlag, "language", "english", "Language for commit message/review")
 	rootCmd.Flags().StringVar(&commitTypeFlag, "commit-type", "", "Commit type (e.g., feat, fix)")
 	rootCmd.Flags().StringVar(&templateFlag, "template", "", "Commit message template")
 	rootCmd.Flags().BoolVar(&forceFlag, "force", false, "Bypass interactive UI and commit directly")
@@ -264,7 +266,7 @@ func runSummarizeCommand(setupAIEnvironment func() (context.Context, context.Can
 	}
 	defer cancel()
 
-	if err := summarizer.SummarizeCommits(ctx, aiClient, cfg); err != nil {
+	if err := summarizer.SummarizeCommits(ctx, aiClient, cfg, languageFlag); err != nil {
 		log.Fatal().Err(err).Msg("Failed to summarize commits")
 	}
 }
@@ -333,7 +335,6 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Aqui usamos cfg.EnableEmoji em vez de emojiFlag
 	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, cfg.EnableEmoji, aiClient)
 }
 
@@ -419,7 +420,7 @@ func runInteractiveUI(
 	diff string,
 	promptText string,
 	styleReviewSuggestions string,
-	enableEmoji bool, // novo parâmetro
+	enableEmoji bool,
 	aiClient ai.AIClient,
 ) {
 	uiModel := ui.NewUIModel(
