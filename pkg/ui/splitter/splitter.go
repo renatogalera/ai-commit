@@ -150,6 +150,7 @@ func (m *Model) updateSelectedCount() {
 func partialCommit(chunks []git.DiffChunk, selected map[int]bool, client ai.AIClient) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+
 	patch, err := buildPatch(chunks, selected)
 	if err != nil {
 		return err
@@ -164,10 +165,12 @@ func partialCommit(chunks []git.DiffChunk, selected map[int]bool, client ai.AICl
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to apply patch: %w", err)
 	}
-	partialDiff, err := git.GetGitDiff(ctx)
+
+	partialDiff, err := git.GetGitDiffIgnoringMoves(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get partial diff: %w", err)
 	}
+
 	commitMsg, err := generatePartialCommitMessage(ctx, partialDiff, client)
 	if err != nil {
 		return err
@@ -211,7 +214,7 @@ Diff:
 }
 
 func RunInteractiveSplit(ctx context.Context, client ai.AIClient) error {
-	diff, err := git.GetGitDiff(ctx)
+	diff, err := git.GetGitDiffIgnoringMoves(ctx)
 	if err != nil {
 		return err
 	}
