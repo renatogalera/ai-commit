@@ -16,6 +16,42 @@ Boost your commit quality, enforce standards, and save valuable time with AI-Com
 
 ---
 
+## 🛠️ Installation
+
+You can install **AI-Commit** using one of two methods: via our automated installation script or by building from source.
+
+### Automated Installation via Script
+
+The installation script will:
+
+- **Detect** your operating system and CPU architecture.
+- **Fetch** the latest release of AI-Commit from GitHub.
+- **Download** the appropriate binary asset.
+- **Set** the executable permission.
+- **Install** the binary to `/usr/local/bin` (using `sudo` if required).
+
+To install via the script, run the following commands in your terminal:
+
+```bash
+curl -sL https://raw.githubusercontent.com/renatogalera/ai-commit/main/scripts/install_ai_commit.sh | bash
+```
+
+*Note*: If you are not running as root, the script will prompt for your password to use `sudo` when moving the binary.
+
+### Building from Source
+
+If you prefer to build AI-Commit manually from source, follow these steps:
+
+```bash
+git clone https://github.com/renatogalera/ai-commit.git
+cd ai-commit
+go build -o ai-commit ./cmd/ai-commit
+# Optionally, move the binary into your PATH for global access:
+sudo mv ai-commit /usr/local/bin/
+```
+
+---
+
 ## ✨ Key Features
 
 - **AI-Powered Commit Messages**: Automatically generate insightful and Conventional Commits-compliant messages using top AI providers (OpenAI, Gemini, Anthropic, DeepSeek, and now Phind).
@@ -212,47 +248,5 @@ API Keys via Environment Variables:
     ai-commit summarize
     ```
     Lists commits with `fzf`, and after you pick one, shows an AI-generated summary in the terminal.
-
----
-
-Below is an updated **Installation** section for the README, which now includes instructions for installing AI-Commit via the automated installation script.
-
----
-
-## 🛠️ Installation
-
-You can install **AI-Commit** using one of two methods: via our automated installation script or by building from source.
-
-### Automated Installation via Script
-
-The installation script will:
-
-- **Detect** your operating system and CPU architecture.
-- **Fetch** the latest release of AI-Commit from GitHub.
-- **Download** the appropriate binary asset.
-- **Set** the executable permission.
-- **Install** the binary to `/usr/local/bin` (using `sudo` if required).
-
-To install via the script, run the following commands in your terminal:
-
-```bash
-curl -sL https://raw.githubusercontent.com/renatogalera/ai-commit/main/scripts/install_ai_commit.sh | bash
-```
-
-*Note*: If you are not running as root, the script will prompt for your password to use `sudo` when moving the binary.
-
-### Building from Source
-
-If you prefer to build AI-Commit manually from source, follow these steps:
-
-```bash
-git clone https://github.com/renatogalera/ai-commit.git
-cd ai-commit
-go build -o ai-commit ./cmd/ai-commit
-# Optionally, move the binary into your PATH for global access:
-sudo mv ai-commit /usr/local/bin/
-```
-
-Once installed, you can run `ai-commit` from your terminal to start generating AI-powered commit messages and reviews.
 
 ---
