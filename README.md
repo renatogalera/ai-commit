@@ -1,5 +1,7 @@
 # AI-Commit
 
+![commit](img/commit.png)
+
 **AI-Commit** is a powerful CLI tool designed to revolutionize your Git workflow by leveraging AI for three key tasks: generating commit messages, providing basic code reviews, and enforcing commit message style guides. By integrating cutting-edge AI models, AI-Commit helps you create meaningful, Conventional Commits-compliant messages, get quick feedback on your code changes, and ensure your commit messages adhere to a high standard of clarity and informativeness—all right from your terminal.
 
 It supports:
@@ -208,31 +210,38 @@ API Keys via Environment Variables:
 
 ## ✍️ More Examples
 
-1.  **Interactive Commit with Style Review**:
+
+1.  **Summarize a Commit**:
+    ```bash
+    ai-commit summarize
+    ```
+    Lists commits with `fzf`, and after you pick one, shows an AI-generated summary in the terminal.
+
+2.  **Interactive Commit with Style Review**:
     ```bash
     ai-commit --review-message
     ```
     Launches the interactive TUI after generating and AI-reviewing the commit message style.
 
-2.  **Force Commit with Style Review (Non-Interactive)**:
+3.  **Force Commit with Style Review (Non-Interactive)**:
     ```bash
     ai-commit --force --review-message
     ```
     Directly commits staged changes after generating and AI-reviewing the commit message style, skipping the TUI. Style review feedback is printed to the terminal before commit.
 
-3.  **AI-Powered Code Review**:
+4.  **AI-Powered Code Review**:
     ```bash
     ai-commit review
     ```
     Executes AI code review and outputs suggestions to the terminal.
 
-4.  **Semantic Release (Manual Version)**:
+5.  **Semantic Release (Manual Version)**:
     ```bash
     ai-commit --semantic-release --manual-semver
     ```
     Semantic release with manual version selection TUI.
 
-5.  **Provider and Model Selection**:
+6.  **Provider and Model Selection**:
     ```bash
     ai-commit --provider=openai --model=gpt-4 --apiKey=sk-...
     ai-commit --provider=gemini --model=models/gemini-2.0-flash --geminiApiKey=...
@@ -241,16 +250,8 @@ API Keys via Environment Variables:
     ai-commit --provider=phind --model=Phind-70B           # Phind model is currently free; API key is optional
     ```
 
-6.  **Interactive Split Commit**:
+7.  **Interactive Split Commit**:
     ```bash
     ai-commit --interactive-split
     ```
-    Starts interactive split TUI.
-
-
-7.  **Summarize a Commit**:
-    ```bash
-    ai-commit summarize
-    ```
-    Lists commits with `fzf`, and after you pick one, shows an AI-generated summary in the terminal.
 ---
