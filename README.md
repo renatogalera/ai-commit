@@ -119,19 +119,11 @@ API Keys via Environment Variables:
     git add .
     ```
 
-2.  **Run AI-Commit for Commit Message (with optional Style Review)**:
+2. **Commit Message Generation**     
     ```bash
-    ai-commit [--review-message]
+    ai-commit
     ```
-    Launches the interactive TUI (or non-interactive commit if `--force` is used). Use the `--review-message` flag to enable AI-based style review of the commit message.
-
-3.  **Run AI-Commit for Code Review**:
-    ```bash
-    ai-commit review
-    ```
-    Executes an AI code review on staged changes, displaying suggestions.
-
-4.  **Interactive TUI Options**: When the TUI is active (after running `ai-commit` without `review`), utilize these options:
+    Standard interactive commit message generation, without style review.
 
     -   **Confirm Commit**: `Enter` or `y` to commit with the generated message.
     -   **Regenerate Message**: `r` to generate a new commit message. Track regen attempts in the UI.
@@ -178,39 +170,30 @@ API Keys via Environment Variables:
 
 ---
 
-## ✍️ Examples
+## ✍️ More Examples
 
 1.  **Interactive Commit with Style Review**:
     ```bash
     ai-commit --review-message
     ```
     Launches the interactive TUI after generating and AI-reviewing the commit message style.
-
 2.  **Force Commit with Style Review (Non-Interactive)**:
     ```bash
     ai-commit --force --review-message
     ```
     Directly commits staged changes after generating and AI-reviewing the commit message style, skipping the TUI. Style review feedback is printed to the terminal before commit.
-
-3.  **Basic Commit Message Generation**:
-    ```bash
-    ai-commit
     ```
-    Standard interactive commit message generation, without style review.
-
-4.  **AI-Powered Code Review**:
+3.  **AI-Powered Code Review**:
     ```bash
     ai-commit review
     ```
     Executes AI code review and outputs suggestions to the terminal.
-
-5.  **Semantic Release (Manual Version)**:
+4.  **Semantic Release (Manual Version)**:
     ```bash
     ai-commit --semantic-release --manual-semver
     ```
     Semantic release with manual version selection TUI.
-
-6.  **Provider and Model Selection**:
+5.  **Provider and Model Selection**:
     ```bash
     ai-commit --provider=openai --model=gpt-4 --apiKey=sk-...
     ai-commit --provider=gemini --model=models/gemini-2.0-flash --geminiApiKey=...
@@ -218,14 +201,13 @@ API Keys via Environment Variables:
     ai-commit --provider=deepseek --model=deepseek-chat --deepseekApiKey=...
     ai-commit --provider=phind --model=Phind-70B           # Phind model is currently free; API key is optional
     ```
-
-7.  **Interactive Split Commit**:
+6.  **Interactive Split Commit**:
     ```bash
     ai-commit --interactive-split
     ```
     Starts interactive split TUI.
 
-8.  **Summarize a Commit**:
+7.  **Summarize a Commit**:
     ```bash
     ai-commit summarize
     ```
@@ -233,15 +215,44 @@ API Keys via Environment Variables:
 
 ---
 
-## 🚀 Get Started
+Below is an updated **Installation** section for the README, which now includes instructions for installing AI-Commit via the automated installation script.
 
-Take your commit messages and code quality to the next level with AI-Commit! Install it now to generate smarter commits, enforce message styles, and gain AI-driven insights into your code changes.
+---
+
+## 🛠️ Installation
+
+You can install **AI-Commit** using one of two methods: via our automated installation script or by building from source.
+
+### Automated Installation via Script
+
+The installation script will:
+
+- **Detect** your operating system and CPU architecture.
+- **Fetch** the latest release of AI-Commit from GitHub.
+- **Download** the appropriate binary asset.
+- **Set** the executable permission.
+- **Install** the binary to `/usr/local/bin` (using `sudo` if required).
+
+To install via the script, run the following commands in your terminal:
+
+```bash
+curl -sL https://raw.githubusercontent.com/renatogalera/ai-commit/main/scripts/install_ai_commit.sh | bash
+```
+
+*Note*: If you are not running as root, the script will prompt for your password to use `sudo` when moving the binary.
+
+### Building from Source
+
+If you prefer to build AI-Commit manually from source, follow these steps:
 
 ```bash
 git clone https://github.com/renatogalera/ai-commit.git
 cd ai-commit
 go build -o ai-commit ./cmd/ai-commit
+# Optionally, move the binary into your PATH for global access:
 sudo mv ai-commit /usr/local/bin/
 ```
+
+Once installed, you can run `ai-commit` from your terminal to start generating AI-powered commit messages and reviews.
 
 ---
