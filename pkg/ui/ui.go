@@ -45,26 +45,27 @@ type (
 	viewDiffMsg struct{}
 )
 
+// --- STYLES ------------------------------------------------------------------
+
 var (
 	logoStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("62"))
 
-	logoText = `AI-COMMIT TUI
-	`
+	logoText = `AI-COMMIT TUI`
 
+	// Where the commit message is shown
 	commitBoxStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("63")).
 			Padding(1, 2).
 			Margin(1, 1)
 
-	sideBoxStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("63")).
-			Padding(1, 2).
-			Margin(1, 1).
-			Width(30)
+	// A smaller style for info lines that are not as important
+	infoLineStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("245")).
+			Margin(0, 1).
+			Italic(true)
 
 	highlightStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("212")).
@@ -74,7 +75,8 @@ var (
 			Foreground(lipgloss.Color("240"))
 )
 
-// keys holds the key bindings.
+// --- KEY MAPPINGS ------------------------------------------------------------
+
 type keys struct {
 	Commit     key.Binding
 	Regenerate key.Binding
@@ -126,7 +128,8 @@ var keyMap = keys{
 	),
 }
 
-// Model is the TUI model.
+// --- MODEL -------------------------------------------------------------------
+
 type Model struct {
 	state       uiState
 	commitMsg   string
@@ -149,14 +152,14 @@ type Model struct {
 	textarea textarea.Model
 	help     help.Model
 
-	// NEW: store style review text (from --review-message)
+	// styleReview holds optional suggestions from AI for commit style:
 	styleReview string
 }
 
 // NewUIModel creates a new TUI model.
 func NewUIModel(
 	commitMsg, diff, language, promptText, commitType, tmpl string,
-	styleReviewSuggestions string, // new param for style review
+	styleReviewSuggestions string,
 	enableEmoji bool,
 	client ai.AIClient,
 ) Model {
@@ -194,7 +197,7 @@ func NewUIModel(
 		textarea:      ta,
 		help:          help.New(),
 
-		styleReview: styleReviewSuggestions, // store the style review suggestions
+		styleReview: styleReviewSuggestions,
 	}
 }
 
@@ -208,7 +211,8 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-// Update handles incoming messages.
+// --- UPDATE ------------------------------------------------------------------
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -281,6 +285,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Rebuild the prompt with the newly selected commit type
 				m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, "", "")
 				return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
+			case "esc", "q":
+				m.state = stateShowCommit
+				return m, nil
 			}
 
 		case stateEditing:
@@ -363,7 +370,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// View renders the TUI based on current state.
+// --- VIEWS -------------------------------------------------------------------
+
 func (m Model) View() string {
 	switch m.state {
 	case stateShowCommit:
@@ -387,22 +395,22 @@ func (m Model) View() string {
 	}
 }
 
+// viewShowCommit has been updated to present the info line in smaller text
+// above the main commit message box, in a single vertical layout.
 func (m Model) viewShowCommit() string {
-	header := renderLogo()
-	footer := m.renderFooter()
-	helpView := m.help.View(m) // m now implements help.KeyMap
+	// 1) The TUI Banner
+	header := logoStyle.Render(logoText)
 
+	// 2) A subtle info line
+	infoText := fmt.Sprintf("Type: %s | Regens Left: %d/%d | Language: %s",
+		m.commitType, (m.maxRegens - m.regenCount), m.maxRegens, m.language)
+	infoLine := infoLineStyle.Render(infoText)
+
+	// 3) The commit box
 	content := commitBoxStyle.Render(m.commitMsg)
-	side := m.renderSideInfo()
 
-	mainCols := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		content,
-		side,
-	)
-
-	// Show style feedback if not "no issues found"
-	var styleReviewSection string
+	// 4) If styleReview is not trivial or "no issues found", show it
+	styleReviewSection := ""
 	if trimmed := strings.TrimSpace(m.styleReview); trimmed != "" &&
 		!strings.Contains(strings.ToLower(trimmed), "no issues found") {
 		styleReviewSection = lipgloss.NewStyle().
@@ -413,69 +421,49 @@ func (m Model) viewShowCommit() string {
 			Render("Style Review Suggestions:\n\n" + trimmed)
 	}
 
-	ui := lipgloss.JoinVertical(
-		lipgloss.Left,
-		header,
-		mainCols,
-	)
+	// 5) The help view
+	helpView := m.help.View(m)
+
+	// Merge everything in one vertical column
+	builder := strings.Builder{}
+	builder.WriteString(header + "\n\n")
+	builder.WriteString(infoLine + "\n")
+	builder.WriteString(content + "\n")
+
 	if styleReviewSection != "" {
-		ui = lipgloss.JoinVertical(lipgloss.Left, ui, styleReviewSection)
+		builder.WriteString(styleReviewSection + "\n")
 	}
 
-	ui = lipgloss.JoinVertical(
-		lipgloss.Left,
-		ui,
-		footer,
-		helpView,
-	)
-	return ui
+	builder.WriteString(helpView + "\n")
+	return builder.String()
 }
 
 func (m Model) viewGenerating() string {
-	header := renderLogo()
+	header := logoStyle.Render(logoText)
 	body := fmt.Sprintf("Generating commit message... (Attempt %d/%d)\n\n%s", m.regenCount, m.maxRegens, m.spinner.View())
-	footer := m.renderFooter()
 	helpView := m.help.View(m)
 
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		header,
-		body,
-		footer,
-		helpView,
-	)
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, helpView)
 }
 
 func (m Model) viewCommitting() string {
-	header := renderLogo()
+	header := logoStyle.Render(logoText)
 	body := fmt.Sprintf("Committing...\n\n%s", m.spinner.View())
-	footer := m.renderFooter()
 	helpView := m.help.View(m)
 
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		header,
-		body,
-		footer,
-		helpView,
-	)
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, helpView)
 }
 
 func (m Model) viewResult() string {
-	header := renderLogo()
+	header := logoStyle.Render(logoText)
 	body := lipgloss.NewStyle().Margin(1, 2).Render(m.result)
 	helpView := m.help.View(m)
 
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		header,
-		body,
-		helpView,
-	)
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, helpView)
 }
 
 func (m Model) viewSelectType() string {
-	header := renderLogo()
+	header := logoStyle.Render(logoText)
 	var b strings.Builder
 	b.WriteString("Select commit type:\n\n")
 	for i, ct := range m.commitTypes {
@@ -485,22 +473,14 @@ func (m Model) viewSelectType() string {
 		}
 		b.WriteString(fmt.Sprintf("%s %s\n", cursor, ct))
 	}
-	footer := lipgloss.NewStyle().Margin(1, 0).Render(
-		"Use ↑/↓ (or j/k) to navigate, enter to select, ESC/q to cancel.\n",
-	)
-	helpView := m.help.View(m)
+	b.WriteString("\nUse up/down (or j/k) to navigate, enter to select, 'q' to cancel.\n")
 
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		header,
-		b.String(),
-		footer,
-		helpView,
-	)
+	helpView := m.help.View(m)
+	return lipgloss.JoinVertical(lipgloss.Left, header, b.String(), helpView)
 }
 
 func (m Model) viewEditing(title string) string {
-	header := renderLogo()
+	header := logoStyle.Render(logoText)
 	body := lipgloss.NewStyle().Margin(1, 2).Render(
 		fmt.Sprintf("%s\n\n%s", title, m.textarea.View()),
 	)
@@ -510,9 +490,8 @@ func (m Model) viewEditing(title string) string {
 }
 
 func (m Model) viewDiff() string {
-	header := renderLogo()
+	header := logoStyle.Render(logoText)
 	diffTextView := diffStyle.Render(m.diff)
-
 	body := lipgloss.NewStyle().Margin(1, 2).Render(
 		fmt.Sprintf("Git Diff:\n\n%s\n\nPress ESC/q to return.", diffTextView),
 	)
@@ -521,26 +500,7 @@ func (m Model) viewDiff() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, helpView)
 }
 
-// Additional rendering functions
-
-func renderLogo() string {
-	return logoStyle.Render(logoText)
-}
-
-func (m Model) renderSideInfo() string {
-	info := []string{
-		highlightStyle.Render("Commit Type: ") + m.commitType,
-		highlightStyle.Render("Regens Left: ") + fmt.Sprintf("%d/%d", m.maxRegens-m.regenCount, m.maxRegens),
-		highlightStyle.Render("Language: ") + m.language,
-	}
-	return sideBoxStyle.Render(strings.Join(info, "\n\n"))
-}
-
-func (m Model) renderFooter() string {
-	return ""
-}
-
-// Commands
+// --- COMMANDS ----------------------------------------------------------------
 
 func commitCmd(commitMsg string) tea.Cmd {
 	return func() tea.Msg {
@@ -597,11 +557,9 @@ func viewDiffCmd(diff string) tea.Cmd {
 }
 
 // -------------------------------------------------------------------------------------
-// Added methods to implement help.KeyMap interface for the Model.
-// These methods allow m.help.View(m) to work correctly.
+// Added methods so Model implements help.KeyMap (for m.help.View(m)).
 // -------------------------------------------------------------------------------------
 
-// ShortHelp returns a flat list of key bindings for short help.
 func (m Model) ShortHelp() []key.Binding {
 	return []key.Binding{
 		keyMap.Commit,
@@ -616,7 +574,6 @@ func (m Model) ShortHelp() []key.Binding {
 	}
 }
 
-// FullHelp returns a two-dimensional slice of key bindings for full help.
 func (m Model) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		m.ShortHelp(),
