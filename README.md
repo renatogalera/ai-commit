@@ -72,18 +72,6 @@ sudo mv ai-commit /usr/local/bin/
 
 ---
 
-## 🛠️ Installation
-
-```bash
-git clone https://github.com/renatogalera/ai-commit.git
-cd ai-commit
-go build -o ai-commit ./cmd/ai-commit
-# Optionally move it into your PATH for global access
-sudo mv ai-commit /usr/local/bin/
-```
-
----
-
 ## ⚙️ Configuration
 
 AI-Commit automatically creates a `config.yaml` file at `~/.config/ai-commit/config.yaml` upon first run. This file lets you personalize default settings:
