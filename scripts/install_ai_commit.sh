@@ -1,10 +1,13 @@
 #!/bin/bash
 # install_ai_commit.sh
-# This script automatically downloads the latest release of ai-commit from GitHub,
+# This script downloads the latest release of ai-commit from GitHub,
 # detects your OS and CPU architecture, selects the matching asset,
-# downloads it, extracts it if needed, makes it executable, and installs it to /usr/local/bin.
+# downloads it, extracts it if necessary, and installs it to a suitable location.
 #
-# Requirements: curl, jq, tar, and sudo (if not running as root).
+# For Linux/macOS, the default destination is /usr/local/bin (unless overridden by INSTALL_DIR).
+# For Windows (e.g. Git Bash/MSYS), the default destination is $HOME/bin.
+#
+# Requirements: curl, jq, tar, and sudo (if not running as root on Linux/macOS).
 
 set -euo pipefail
 
@@ -18,7 +21,7 @@ error_exit() {
 }
 
 ###########################################
-# Check for required commands: curl, jq, and tar
+# Check for required commands: curl, jq, tar
 ###########################################
 for cmd in curl jq tar; do
     if ! command -v "$cmd" &>/dev/null; then
@@ -27,7 +30,7 @@ for cmd in curl jq tar; do
 done
 
 ###########################################
-# Hard-coded GitHub repository details
+# GitHub repository details
 ###########################################
 GITHUB_OWNER="renatogalera"
 GITHUB_REPO="ai-commit"
@@ -36,7 +39,7 @@ API_URL="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/la
 echo "Fetching latest release information for ${GITHUB_OWNER}/${GITHUB_REPO}..."
 
 ###########################################
-# Retrieve the latest release data
+# Retrieve the latest release data from GitHub API
 ###########################################
 API_RESPONSE=$(curl -sL "$API_URL")
 if echo "$API_RESPONSE" | jq -e 'has("message") and .message == "Not Found"' >/dev/null; then
@@ -70,8 +73,31 @@ esac
 echo "Detected system: OS=${os}, Architecture=${arch}"
 
 ###########################################
-# Find the asset matching the system details
-# (case-insensitive search)
+# Determine installation directory
+#
+# - If INSTALL_DIR is provided in the environment, use it.
+# - For Windows (MSYS/Git Bash), default to $HOME/bin.
+# - For Linux/macOS, default to /usr/local/bin.
+###########################################
+if [ -n "${INSTALL_DIR:-}" ]; then
+    DEST_DIR="$INSTALL_DIR"
+elif [ "$os" = "windows" ]; then
+    DEST_DIR="$HOME/bin"
+else
+    DEST_DIR="/usr/local/bin"
+fi
+
+# Create DEST_DIR if it doesn't exist
+if [ ! -d "$DEST_DIR" ]; then
+    echo "Creating destination directory: ${DEST_DIR}"
+    mkdir -p "$DEST_DIR" || error_exit "Failed to create directory ${DEST_DIR}"
+fi
+
+DESTINATION="${DEST_DIR}/ai-commit"
+echo "Installation destination set to: ${DESTINATION}"
+
+###########################################
+# Find the asset matching the system details (case-insensitive search)
 ###########################################
 ASSET_INFO=$(echo "$API_RESPONSE" | jq --arg os "$os" --arg arch "$arch" '
     .assets[] | select(
@@ -104,7 +130,7 @@ echo "Downloading asset from: ${ASSET_URL}..."
 ###########################################
 # Download the asset to a temporary file
 ###########################################
-TMP_FILE=$(mktemp /tmp/"${ASSET_NAME}".XXXXXX) || error_exit "Failed to create a temporary file."
+TMP_FILE=$(mktemp "/tmp/${ASSET_NAME}.XXXXXX") || error_exit "Failed to create a temporary file."
 
 HTTP_STATUS=$(curl -L -o "$TMP_FILE" -w "%{http_code}" "$ASSET_URL")
 if [ "$HTTP_STATUS" -ne 200 ]; then
@@ -115,13 +141,13 @@ fi
 echo "Download completed."
 
 ###########################################
-# Check if the asset is a tar.gz (or .tgz) archive.
-# If so, extract it.
+# Check if the asset is an archive (tar.gz or tgz)
+# If so, extract it to find the ai-commit binary.
 ###########################################
 BINARY_PATH=""
 if [[ "$ASSET_NAME" =~ \.(tar\.gz|tgz)$ ]]; then
     echo "Asset is an archive. Extracting..."
-    TMP_DIR=$(mktemp -d /tmp/ai-commit-extract.XXXXXX) || error_exit "Failed to create temporary extraction directory."
+    TMP_DIR=$(mktemp -d "/tmp/ai-commit-extract.XXXXXX") || error_exit "Failed to create temporary extraction directory."
     tar -xzf "$TMP_FILE" -C "$TMP_DIR"
     # Look for the 'ai-commit' binary (assumed to be at the root or inside one directory)
     BINARY_PATH=$(find "$TMP_DIR" -type f -name "ai-commit" -perm /111 | head -n 1)
@@ -131,12 +157,12 @@ if [[ "$ASSET_NAME" =~ \.(tar\.gz|tgz)$ ]]; then
     fi
     echo "Extracted binary: $BINARY_PATH"
 else
-    # Asset is assumed to be a binary directly.
+    # Asset is assumed to be the binary directly.
     BINARY_PATH="$TMP_FILE"
 fi
 
 ###########################################
-# Validate the binary and set permissions
+# Validate the binary and set execute permissions
 ###########################################
 if [ ! -s "$BINARY_PATH" ]; then
     rm -f "$BINARY_PATH" "$TMP_FILE"
@@ -146,12 +172,12 @@ fi
 chmod +x "$BINARY_PATH" || error_exit "Failed to set execute permission on the binary."
 
 ###########################################
-# Install the binary to /usr/local/bin
+# Install the binary to the destination directory
 ###########################################
-DESTINATION="/usr/local/bin/ai-commit"
 echo "Installing to ${DESTINATION}..."
 
-if [ "$EUID" -ne 0 ]; then
+# On Linux/macOS, use sudo if not run as root.
+if [ "$os" != "windows" ] && [ "$EUID" -ne 0 ]; then
     sudo mv "$BINARY_PATH" "$DESTINATION" || { rm -f "$BINARY_PATH"; error_exit "Failed to move file to ${DESTINATION}."; }
 else
     mv "$BINARY_PATH" "$DESTINATION" || { rm -f "$BINARY_PATH"; error_exit "Failed to move file to ${DESTINATION}."; }
@@ -163,4 +189,4 @@ if [ -n "${TMP_DIR:-}" ]; then
     rm -rf "$TMP_DIR"
 fi
 
-echo "Installation complete. 'ai-commit' is now available in /usr/local/bin."
+echo "Installation complete. 'ai-commit' is now available at ${DESTINATION}."
