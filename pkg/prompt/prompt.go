@@ -18,6 +18,15 @@ const DefaultPromptTemplate = `Generate a git commit message that is clear, conc
 - After the subject line, leave a blank line and then list key changes with bullet points.
 - Do not include extraneous details such as commit hash, branch name, spacing details, or formatting guidelines.
 - Avoid repeating information.
+- Ignores moved code blocks and whitespace changes
+- Excludes comment/doc changes unless substantive
+- Focuses on actual code changes
+
+Key rules:
+1. Use format "type: subject" 
+2. Omit trivial changes (comments, formatting)
+3. Highlight behavior changes
+
 {COMMIT_TYPE_HINT}
 - Write the message in {LANGUAGE}.
 

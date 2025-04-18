@@ -14,9 +14,11 @@ const (
 	DefaultProvider       = "phind"
 	DefaultOpenAIModel    = "chatgpt-4o-latest"
 	DefaultGeminiModel    = "models/gemini-2.0-flash"
-	DefaultAnthropicModel = "claude-3-5-sonnet-latest"
+	DefaultAnthropicModel = "claude-3-7-sonnet-latest"
 	DefaultDeepseekModel  = "deepseek-chat"
 	DefaultPhindModel     = "Phind-70B"
+	DefaultOllamaModel    = "llama2"
+	DefaultOllamaBaseURL  = "http://localhost:11434"
 )
 
 var (
@@ -38,7 +40,7 @@ type Config struct {
 	SemanticRelease  bool               `yaml:"semanticRelease,omitempty"`
 	InteractiveSplit bool               `yaml:"interactiveSplit,omitempty"`
 	EnableEmoji      bool               `yaml:"enableEmoji,omitempty"`
-	Provider         string             `yaml:"provider,omitempty" validate:"omitempty,oneof=openai gemini anthropic deepseek phind"`
+	Provider         string             `yaml:"provider,omitempty" validate:"omitempty,oneof=openai gemini anthropic deepseek phind ollama"`
 	CommitTypes      []CommitTypeConfig `yaml:"commitTypes,omitempty"`
 	LockFiles        []string           `yaml:"lockFiles,omitempty"`
 
@@ -52,6 +54,8 @@ type Config struct {
 	DeepseekModel   string `yaml:"deepseekModel,omitempty"`
 	PhindAPIKey     string `yaml:"phindApiKey,omitempty"`
 	PhindModel      string `yaml:"phindModel,omitempty"`
+	OllamaBaseURL   string `yaml:"ollamaBaseURL,omitempty"`
+	OllamaModel     string `yaml:"ollamaModel,omitempty"`
 	PromptTemplate  string `yaml:"promptTemplate,omitempty"`
 
 	AuthorName  string `yaml:"authorName,omitempty"`
@@ -93,6 +97,8 @@ func LoadOrCreateConfig() (*Config, error) {
 			DeepseekModel:   DefaultDeepseekModel,
 			PhindAPIKey:     "",
 			PhindModel:      DefaultPhindModel,
+			OllamaBaseURL:   DefaultOllamaBaseURL,
+			OllamaModel:     DefaultOllamaModel,
 			AuthorName:      DefaultAuthorName,
 			AuthorEmail:     DefaultAuthorEmail,
 			LockFiles:       []string{"go.mod", "go.sum"},
