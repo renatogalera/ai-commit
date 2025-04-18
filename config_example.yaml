@@ -4,9 +4,8 @@
 authorName: "Your Name"
 authorEmail: "youremail@example.com"
 
-
-# Which AI provider to use. Valid options: "openai", "gemini" or "anthropic"
-provider: "phind"  # Current Phind model is free
+# Which AI provider to use. Valid options: "openai", "google" or "anthropic"
+provider: "phind" # Current Phind model is free
 
 # Phind model to use.
 phindModel: "Phind-70B"
@@ -14,20 +13,20 @@ phindModel: "Phind-70B"
 # OpenAI model to use.
 openaiModel: "gpt-4olatest"
 
-# Gemini model to use.
-geminiModel: "models/gemini-2.0-flash"
+# Google model to use.
+googleModel: "models/gemini-2.5-flash"
 
 # Anthropic model to use.
 anthropicModel: "claude-3-5-sonnet-latest"
 
 # API key for Phind. Overridden by the --phindApiKey flag or the PHIND_API_KEY environment variable.
-phindApiKey: ""             # Phind does not require an API key by default
+phindApiKey: "" # Phind does not require an API key by default
 
 # API key for OpenAI. Overridden by the --apiKey flag or the OPENAI_API_KEY environment variable.
 openAiApiKey: "sk-your-openai-key"
 
-# API key for Gemini. Overridden by the --geminiApiKey flag or the GEMINI_API_KEY environment variable.
-geminiApiKey: ""
+# API key for Google. Overridden by the --googleApiKey flag or the GOOGLE_API_KEY environment variable.
+googleApiKey: ""
 
 # API key for Anthropic. Overridden by the --anthropicApiKey flag or the ANTHROPIC_API_KEY environment variable.
 anthropicApiKey: ""
@@ -42,27 +41,27 @@ template: ""
 promptTemplate: "" # Customize the AI prompt template here
 
 commitTypes:
-  - type: "feat"
-    emoji: "✨"
-  - type: "fix"
-    emoji: "🐛"
-  - type: "docs"
-    emoji: "📚"
-  - type: "style"
-    emoji: "💎"
-  - type: "refactor"
-    emoji: "♻️"
-  - type: "test"
-    emoji: "🧪"
-  - type: "chore"
-    emoji: "🔧"
-  - type: "perf"
-    emoji: "🚀"
-  - type: "build"
-    emoji: "📦"
-  - type: "ci"
-    emoji: "👷"
-lockFiles: # Specify lock files to filter from diff
-  - "go.mod"
-  - "go.sum"
-
+- type: "feat"
+  emoji: "✨"
+- type: "fix"
+  emoji: "🐛"
+- type: "docs"
+  emoji: "📚"
+- type: "style"
+  emoji: "💎"
+- type: "refactor"
+  emoji: "♻️"
+- type: "test"
+  emoji: "🧪"
+- type: "chore"
+  emoji: "🔧"
+- type: "perf"
+  emoji: "🚀"
+- type: "build"
+  emoji: "📦"
+- type: "ci"
+  emoji: "👷"
+lockFiles:
+# Specify lock files to filter from diff
+- "go.mod"
+- "go.sum"

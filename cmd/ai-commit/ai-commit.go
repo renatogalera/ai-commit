@@ -19,7 +19,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/prompt"
 	"github.com/renatogalera/ai-commit/pkg/provider/anthropic"
 	"github.com/renatogalera/ai-commit/pkg/provider/deepseek"
-	"github.com/renatogalera/ai-commit/pkg/provider/gemini"
+	"github.com/renatogalera/ai-commit/pkg/provider/google"
 	"github.com/renatogalera/ai-commit/pkg/provider/ollama"
 	"github.com/renatogalera/ai-commit/pkg/provider/openai"
 	"github.com/renatogalera/ai-commit/pkg/provider/phind"
@@ -38,7 +38,7 @@ var (
 
 var (
 	apiKeyFlag           string
-	geminiAPIKeyFlag     string
+	googleAPIKeyFlag     string
 	anthropicAPIKeyFlag  string
 	deepseekAPIKeyFlag   string
 	phindAPIKeyFlag      string
@@ -77,7 +77,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&languageFlag, "language", "english", "Language for commit message/review")
 
 	rootCmd.Flags().StringVar(&apiKeyFlag, "apiKey", "", "API key for OpenAI provider (or env OPENAI_API_KEY)")
-	rootCmd.Flags().StringVar(&geminiAPIKeyFlag, "geminiApiKey", "", "API key for Gemini provider (or env GEMINI_API_KEY)")
+	rootCmd.Flags().StringVar(&googleAPIKeyFlag, "googleApiKey", "", "API key for Google provider (or env GOOGLE_API_KEY)")
 	rootCmd.Flags().StringVar(&anthropicAPIKeyFlag, "anthropicApiKey", "", "API key for Anthropic provider (or env ANTHROPIC_API_KEY)")
 	rootCmd.Flags().StringVar(&deepseekAPIKeyFlag, "deepseekApiKey", "", "API key for Deepseek provider (or env DEEPSEEK_API_KEY)")
 	rootCmd.Flags().StringVar(&phindAPIKeyFlag, "phindApiKey", "", "API key for Phind provider (or env PHIND_API_KEY)")
@@ -89,7 +89,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&interactiveSplitFlag, "interactive-split", false, "Launch interactive commit splitting")
 	rootCmd.Flags().BoolVar(&emojiFlag, "emoji", false, "Include emoji in commit message")
 	rootCmd.Flags().BoolVar(&manualSemverFlag, "manual-semver", false, "Manually select semantic version bump")
-	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, gemini, anthropic, deepseek, phind")
+	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, google, anthropic, deepseek, phind")
 	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Sub-model for the chosen provider")
 	rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
 
@@ -158,7 +158,7 @@ func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, 
 }
 
 func isValidProvider(provider string) bool {
-	validProviders := []string{"openai", "gemini", "anthropic", "deepseek", "phind", "ollama"}
+	validProviders := []string{"openai", "google", "anthropic", "deepseek", "phind", "ollama"}
 	for _, p := range validProviders {
 		if p == provider {
 			return true
@@ -189,20 +189,20 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 		}
 		return openai.NewOpenAIClient(key, model), nil
 
-	case "gemini":
-		key, err := config.ResolveAPIKey(geminiAPIKeyFlag, "GEMINI_API_KEY", cfg.GeminiAPIKey, "gemini")
+	case "google":
+		key, err := config.ResolveAPIKey(googleAPIKeyFlag, "GOOGLE_API_KEY", cfg.GoogleAPIKey, "google")
 		if err != nil {
 			return nil, err
 		}
-		model := cfg.GeminiModel
+		model := cfg.GoogleModel
 		if modelFlag != "" {
 			model = modelFlag
 		}
-		geminiClient, err := gemini.NewGeminiProClient(ctx, key, model)
+		googleClient, err := google.NewGoogleProClient(ctx, key, model)
 		if err != nil {
-			return nil, fmt.Errorf("falha ao inicializar o cliente Gemini: %w", err)
+			return nil, fmt.Errorf("falha ao inicializar o cliente Google: %w", err)
 		}
-		return gemini.NewClient(geminiClient), nil
+		return google.NewClient(googleClient), nil
 
 	case "anthropic":
 		key, err := config.ResolveAPIKey(anthropicAPIKeyFlag, "ANTHROPIC_API_KEY", cfg.AnthropicAPIKey, "anthropic")
