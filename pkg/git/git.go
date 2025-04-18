@@ -223,7 +223,7 @@ func reassembleLineDiffs(lines []lineDiff) []diffmatchpatch.Diff {
 		if len(chunkLines) > 0 {
 			out = append(out, diffmatchpatch.Diff{
 				Type: currentOp,
-				Text: strings.Join(chunkLines, "\n") + "\n",
+				Text: strings.Join(chunkLines, "\n"), // Avoid potentially adding extra newline
 			})
 		}
 	}
