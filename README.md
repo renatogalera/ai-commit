@@ -7,7 +7,7 @@
 It supports:
 
 - **OpenAI**
-- **Google GOOGLE**
+- **Google Gemini**
 - **Anthropic Claude**
 - **DeepSeek**
 - **Phind** (current model is free)
