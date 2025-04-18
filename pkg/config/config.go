@@ -13,7 +13,7 @@ import (
 const (
 	DefaultProvider       = "phind"
 	DefaultOpenAIModel    = "chatgpt-4o-latest"
-	DefaultGeminiModel    = "models/gemini-2.0-flash"
+	DefaultGoogleModel    = "models/gemini-2.5-flash"
 	DefaultAnthropicModel = "claude-3-7-sonnet-latest"
 	DefaultDeepseekModel  = "deepseek-chat"
 	DefaultPhindModel     = "Phind-70B"
@@ -40,14 +40,14 @@ type Config struct {
 	SemanticRelease  bool               `yaml:"semanticRelease,omitempty"`
 	InteractiveSplit bool               `yaml:"interactiveSplit,omitempty"`
 	EnableEmoji      bool               `yaml:"enableEmoji,omitempty"`
-	Provider         string             `yaml:"provider,omitempty" validate:"omitempty,oneof=openai gemini anthropic deepseek phind ollama"`
+	Provider         string             `yaml:"provider,omitempty" validate:"omitempty,oneof=openai google anthropic deepseek phind ollama"`
 	CommitTypes      []CommitTypeConfig `yaml:"commitTypes,omitempty"`
 	LockFiles        []string           `yaml:"lockFiles,omitempty"`
 
 	OpenAIAPIKey    string `yaml:"openAiApiKey,omitempty"`
 	OpenAIModel     string `yaml:"openaiModel,omitempty"`
-	GeminiAPIKey    string `yaml:"geminiApiKey,omitempty"`
-	GeminiModel     string `yaml:"geminiModel,omitempty"`
+	GoogleAPIKey    string `yaml:"googleApiKey,omitempty"`
+	GoogleModel     string `yaml:"googleModel,omitempty"`
 	AnthropicAPIKey string `yaml:"anthropicApiKey,omitempty"`
 	AnthropicModel  string `yaml:"anthropicModel,omitempty"`
 	DeepseekAPIKey  string `yaml:"deepseekApiKey,omitempty"`
@@ -89,8 +89,8 @@ func LoadOrCreateConfig() (*Config, error) {
 			Provider:        DefaultProvider,
 			OpenAIAPIKey:    "",
 			OpenAIModel:     DefaultOpenAIModel,
-			GeminiAPIKey:    "",
-			GeminiModel:     DefaultGeminiModel,
+			GoogleAPIKey:    "",
+			GoogleModel:     DefaultGoogleModel,
 			AnthropicAPIKey: "",
 			AnthropicModel:  DefaultAnthropicModel,
 			DeepseekAPIKey:  "",

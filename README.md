@@ -7,7 +7,7 @@
 It supports:
 
 - **OpenAI**
-- **Google Gemini**
+- **Google GOOGLE**
 - **Anthropic Claude**
 - **DeepSeek**
 - **Phind** (current model is free)
@@ -57,7 +57,7 @@ sudo mv ai-commit /usr/local/bin/
 
 ## ✨ Key Features
 
-- **AI-Powered Commit Messages**: Automatically generate insightful and Conventional Commits-compliant messages using top AI providers (OpenAI, Gemini, Anthropic, DeepSeek, and now Phind).
+- **AI-Powered Commit Messages**: Automatically generate insightful and Conventional Commits-compliant messages using top AI providers (OpenAI, Google, Anthropic, DeepSeek, and now Phind).
 - **AI Code Reviewer (Subcommand)**: Get basic, AI-driven code reviews directly in your terminal. Identify potential style issues, refactoring opportunities, and basic security concerns before committing. Use the `ai-commit review` subcommand to analyze your staged changes.
 - **AI Commit Message Style Guide Enforcer (`--review-message`)**: Automatically review and enforce your commit message style using AI. Get feedback on clarity, informativeness, and overall quality to ensure consistently excellent commit messages. Enable with the `--review-message` flag during commit message generation.
 - **Interactive TUI**: Refine commit messages in an enhanced, user-friendly Text User Interface. Regenerate messages, change commit types, edit prompts, view the full diff, and now also benefit from AI-driven style review feedback—all within the TUI.
@@ -66,7 +66,7 @@ sudo mv ai-commit /usr/local/bin/
 - **Interactive Commit Splitting (`--interactive-split`)**: Gain granular control over your commits with chunk-based staging and commit message generation for partial commits.
 - **Emoji Support (`--emoji`)**: Add a touch of visual flair to your commit history with automatically included emojis based on commit types.
 - **Customizable Templates (`--template`)**: Tailor commit messages to your team's style with custom templates, incorporating dynamic values like branch names.
-- **Multi-Provider AI Support**: Choose the best AI for each task by switching seamlessly between OpenAI, Gemini, Anthropic, DeepSeek, and Phind.
+- **Multi-Provider AI Support**: Choose the best AI for each task by switching seamlessly between OpenAI, Google, Anthropic, DeepSeek, and Phind.
 - **Configurable and Filterable**: Adapt AI-Commit to your projects with customizable commit types and prompt templates. Filter lock file diffs for cleaner, AI-focused message generation and reviews.
 - **Diff View in TUI**: Inspect complete Git diffs within the TUI (`l` key) for thorough pre-commit reviews.
 - **Enhanced Splitter UI**: Benefit from improved interactive splitting with chunk selection inversion and clear status updates.
@@ -90,8 +90,8 @@ phindModel: "Phind-70B"      # Current Phind model is free
 openAiApiKey: "sk-YOUR-OPENAI-KEY"
 openaiModel: "gpt-4o-latest"
 
-geminiApiKey: "YOUR-GEMINI-KEY"
-geminiModel: "models/gemini-2.0-flash"
+googleApiKey: "YOUR-GOOGLE-KEY"
+googleModel: "models/google-2.0-flash"
 
 anthropicApiKey: "sk-YOUR-ANTHROPIC-KEY"
 anthropicModel: "claude-3-5-sonnet-latest"
@@ -99,8 +99,8 @@ anthropicModel: "claude-3-5-sonnet-latest"
 deepseekApiKey: "YOUR-DEEPSEEK-KEY"
 deepseekModel: "deepseek-chat"
 
-ollamaBaseURL: "http://localhost:11434"  # URL do servidor Ollama
-ollamaModel: "llama2"                    # Modelo Ollama a ser usado
+ollamaBaseURL: "http://localhost:11434"
+ollamaModel: "llama2"
 
 semanticRelease: false
 interactiveSplit: false
@@ -140,7 +140,7 @@ lockFiles: # Specify lock files to be ignored in diffs for commit messages and r
 API Keys via Environment Variables:
 
 - `OPENAI_API_KEY`
-- `GEMINI_API_KEY`
+- `GOOGLE_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `DEEPSEEK_API_KEY`
 - `PHIND_API_KEY`
@@ -176,9 +176,9 @@ API Keys via Environment Variables:
 
 **Main Flags**:
 
-*   `--provider`: AI provider selection (`openai`, `gemini`, `anthropic`, `deepseek`, `phind`, `ollama`).
-*   `--model`: Specific model choice per provider (e.g., `gpt-4`, `models/gemini-2.0-flash`, `claude-3-5-sonnet-latest`, `deepseek-chat`, `Phind-70B`, `llama2`).
-*   `--apiKey`, `--geminiApiKey`, `--anthropicApiKey`, `--deepseekApiKey`, `--phindApiKey`: API keys for each provider.
+*   `--provider`: AI provider selection (`openai`, `google`, `anthropic`, `deepseek`, `phind`, `ollama`).
+*   `--model`: Specific model choice per provider (e.g., `gpt-4`, `models/google-2.0-flash`, `claude-3-5-sonnet-latest`, `deepseek-chat`, `Phind-70B`, `llama2`).
+*   `--apiKey`, `--googleApiKey`, `--anthropicApiKey`, `--deepseekApiKey`, `--phindApiKey`: API keys for each provider.
 *   `--ollamaBaseURL`: Base URL for Ollama provider (default: http://localhost:11434).
 *   `--commit-type`: Force a commit type (e.g., `fix`, `feat`) for non-interactive use or AI guidance.
 *   `--template`: Custom template for commit messages, wrapping AI output.
@@ -242,7 +242,7 @@ API Keys via Environment Variables:
 6.  **Provider and Model Selection**:
     ```bash
     ai-commit --provider=openai --model=gpt-4 --apiKey=sk-...
-    ai-commit --provider=gemini --model=models/gemini-2.0-flash --geminiApiKey=...
+    ai-commit --provider=google --model=models/google-2.0-flash --googleApiKey=...
     ai-commit --provider=anthropic --model=claude-3-sonnet --anthropicApiKey=...
     ai-commit --provider=deepseek --model=deepseek-chat --deepseekApiKey=...
     ai-commit --provider=phind --model=Phind-70B           # Phind model is currently free; API key is optional
