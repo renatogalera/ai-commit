@@ -11,6 +11,7 @@ It supports:
 - **Anthropic Claude**
 - **DeepSeek**
 - **Phind** (current model is free)
+- **Ollama** (local AI models)
 
 Boost your commit quality, enforce standards, and save valuable time with AI-Commit, your all-in-one AI assistant for Git workflows.
 
@@ -98,6 +99,9 @@ anthropicModel: "claude-3-5-sonnet-latest"
 deepseekApiKey: "YOUR-DEEPSEEK-KEY"
 deepseekModel: "deepseek-chat"
 
+ollamaBaseURL: "http://localhost:11434"  # URL do servidor Ollama
+ollamaModel: "llama2"                    # Modelo Ollama a ser usado
+
 semanticRelease: false
 interactiveSplit: false
 enableEmoji: false
@@ -172,9 +176,10 @@ API Keys via Environment Variables:
 
 **Main Flags**:
 
-*   `--provider`: AI provider selection (`openai`, `gemini`, `anthropic`, `deepseek`, `phind`).
-*   `--model`: Specific model choice per provider (e.g., `gpt-4`, `models/gemini-2.0-flash`, `claude-3-5-sonnet-latest`, `deepseek-chat`, `Phind-70B`).
+*   `--provider`: AI provider selection (`openai`, `gemini`, `anthropic`, `deepseek`, `phind`, `ollama`).
+*   `--model`: Specific model choice per provider (e.g., `gpt-4`, `models/gemini-2.0-flash`, `claude-3-5-sonnet-latest`, `deepseek-chat`, `Phind-70B`, `llama2`).
 *   `--apiKey`, `--geminiApiKey`, `--anthropicApiKey`, `--deepseekApiKey`, `--phindApiKey`: API keys for each provider.
+*   `--ollamaBaseURL`: Base URL for Ollama provider (default: http://localhost:11434).
 *   `--commit-type`: Force a commit type (e.g., `fix`, `feat`) for non-interactive use or AI guidance.
 *   `--template`: Custom template for commit messages, wrapping AI output.
 *   `--prompt` *(Deprecated)*: Use `promptTemplate` in `config.yaml` for persistent prompt customization instead.
@@ -241,6 +246,7 @@ API Keys via Environment Variables:
     ai-commit --provider=anthropic --model=claude-3-sonnet --anthropicApiKey=...
     ai-commit --provider=deepseek --model=deepseek-chat --deepseekApiKey=...
     ai-commit --provider=phind --model=Phind-70B           # Phind model is currently free; API key is optional
+    ai-commit --provider=ollama --model=llama2 --ollamaBaseURL=http://localhost:11434  # Use local Ollama instance
     ```
 
 7.  **Interactive Split Commit**:

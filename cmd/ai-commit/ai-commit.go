@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -19,6 +20,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/provider/anthropic"
 	"github.com/renatogalera/ai-commit/pkg/provider/deepseek"
 	"github.com/renatogalera/ai-commit/pkg/provider/gemini"
+	"github.com/renatogalera/ai-commit/pkg/provider/ollama"
 	"github.com/renatogalera/ai-commit/pkg/provider/openai"
 	"github.com/renatogalera/ai-commit/pkg/provider/phind"
 	"github.com/renatogalera/ai-commit/pkg/summarizer"
@@ -40,6 +42,7 @@ var (
 	anthropicAPIKeyFlag  string
 	deepseekAPIKeyFlag   string
 	phindAPIKeyFlag      string
+	ollamaBaseURLFlag    string
 	commitTypeFlag       string
 	templateFlag         string
 	languageFlag         string
@@ -78,7 +81,7 @@ func init() {
 	rootCmd.Flags().StringVar(&anthropicAPIKeyFlag, "anthropicApiKey", "", "API key for Anthropic provider (or env ANTHROPIC_API_KEY)")
 	rootCmd.Flags().StringVar(&deepseekAPIKeyFlag, "deepseekApiKey", "", "API key for Deepseek provider (or env DEEPSEEK_API_KEY)")
 	rootCmd.Flags().StringVar(&phindAPIKeyFlag, "phindApiKey", "", "API key for Phind provider (or env PHIND_API_KEY)")
-
+	rootCmd.Flags().StringVar(&ollamaBaseURLFlag, "ollamaBaseURL", "", "Base URL for Ollama provider")
 	rootCmd.Flags().StringVar(&commitTypeFlag, "commit-type", "", "Commit type (e.g., feat, fix)")
 	rootCmd.Flags().StringVar(&templateFlag, "template", "", "Commit message template")
 	rootCmd.Flags().BoolVar(&forceFlag, "force", false, "Bypass interactive UI and commit directly")
@@ -155,18 +158,26 @@ func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, 
 }
 
 func isValidProvider(provider string) bool {
-	validProviders := map[string]bool{
-		"openai":    true,
-		"gemini":    true,
-		"anthropic": true,
-		"deepseek":  true,
-		"phind":     true,
+	validProviders := []string{"openai", "gemini", "anthropic", "deepseek", "phind", "ollama"}
+	for _, p := range validProviders {
+		if p == provider {
+			return true
+		}
 	}
-	return validProviders[provider]
+	return false
 }
 
 func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) {
-	switch cfg.Provider {
+	provider := cfg.Provider
+	if providerFlag != "" {
+		provider = providerFlag
+	}
+
+	if !isValidProvider(provider) {
+		return nil, fmt.Errorf("provider inválido: %s", provider)
+	}
+
+	switch provider {
 	case "openai":
 		key, err := config.ResolveAPIKey(apiKeyFlag, "OPENAI_API_KEY", cfg.OpenAIAPIKey, "openai")
 		if err != nil {
@@ -189,7 +200,7 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 		}
 		geminiClient, err := gemini.NewGeminiProClient(ctx, key, model)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize Gemini client: %w", err)
+			return nil, fmt.Errorf("falha ao inicializar o cliente Gemini: %w", err)
 		}
 		return gemini.NewClient(geminiClient), nil
 
@@ -204,7 +215,7 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 		}
 		anthroClient, err := anthropic.NewAnthropicClient(key, model)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize Anthropic client: %w", err)
+			return nil, fmt.Errorf("falha ao inicializar o cliente Anthropic: %w", err)
 		}
 		return anthroClient, nil
 
@@ -219,7 +230,7 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 		}
 		deepseekClient, err := deepseek.NewDeepseekClient(key, model)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize Deepseek client: %w", err)
+			return nil, fmt.Errorf("falha ao inicializar o cliente Deepseek: %w", err)
 		}
 		return deepseekClient, nil
 
@@ -233,8 +244,45 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 			model = modelFlag
 		}
 		return phind.NewPhindClient(key, model), nil
+
+	case "ollama":
+		baseURL := cfg.OllamaBaseURL
+		if ollamaBaseURLFlag != "" {
+			baseURL = ollamaBaseURLFlag
+		}
+		if baseURL == "" {
+			baseURL = config.DefaultOllamaBaseURL
+		}
+		model := cfg.OllamaModel
+		if modelFlag != "" {
+			model = modelFlag
+		}
+		if model == "" {
+			model = config.DefaultOllamaModel
+		}
+		return ollama.NewOllamaClient(baseURL, model), nil
+
+	default:
+		return nil, fmt.Errorf("provider não suportado: %s", provider)
 	}
-	return nil, fmt.Errorf("invalid provider specified: %s", cfg.Provider)
+}
+
+func formatReviewOutput(title, content string) string {
+	headerStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("63")).
+		Underline(true).
+		MarginBottom(1)
+	contentStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("250")).
+		PaddingLeft(2)
+	separatorStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240"))
+	var b strings.Builder
+	b.WriteString(headerStyle.Render(title) + "\n\n")
+	b.WriteString(contentStyle.Render(content) + "\n")
+	b.WriteString(separatorStyle.Render(strings.Repeat("─", 50)))
+	return b.String()
 }
 
 func runAICommit(cmd *cobra.Command, args []string) {
@@ -281,8 +329,8 @@ func runAICommit(cmd *cobra.Command, args []string) {
 	if forceFlag {
 		if reviewMessageFlag && strings.TrimSpace(styleReviewSuggestions) != "" &&
 			!strings.Contains(strings.ToLower(styleReviewSuggestions), "no issues found") {
-			fmt.Println("\nAI Commit Message Style Review Suggestions:")
-			fmt.Println(styleReviewSuggestions)
+			formattedStyleReview := formatReviewOutput("AI Commit Message Style Review Suggestions", styleReviewSuggestions)
+			fmt.Println("\n" + formattedStyleReview)
 		}
 		if strings.TrimSpace(commitMsg) == "" {
 			log.Fatal().Msg("Generated commit message is empty; aborting commit.")
@@ -327,8 +375,8 @@ func runAICodeReview(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	fmt.Println("\nAI Code Review Suggestions:")
-	fmt.Println(strings.TrimSpace(reviewResult))
+	formattedReview := formatReviewOutput("AI Code Review Suggestions", strings.TrimSpace(reviewResult))
+	fmt.Println("\n" + formattedReview)
 }
 
 func newSummarizeCmd(setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) *cobra.Command {

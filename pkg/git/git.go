@@ -17,14 +17,11 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
-// lineDiff is our small struct for line-by-line expansions
-// (needed by removeMovedBlocks and reassembleLineDiffs).
 type lineDiff struct {
 	Op   diffmatchpatch.Operation
 	Text string
 }
 
-// IsGitRepository checks if we're in a valid git repo.
 func IsGitRepository(ctx context.Context) bool {
 	_, err := git.PlainOpen(".")
 	return err == nil
@@ -174,77 +171,46 @@ func getDiffAgainstEmptyIgnoringMoves(repo *git.Repository) (string, error) {
 // removeMovedBlocks attempts to detect lines that are purely moved from one location
 // to another (delete+insert of the same line) and remove them from the final diff.
 func removeMovedBlocks(diffs []diffmatchpatch.Diff) []diffmatchpatch.Diff {
-	// Expand multi-line text blocks into lineDiff entries.
-	var expanded []lineDiff
-	for _, df := range diffs {
-		lines := strings.Split(df.Text, "\n")
-		// if the last line is empty from a trailing newline, remove
-		if len(lines) > 0 && lines[len(lines)-1] == "" {
-			lines = lines[:len(lines)-1]
-		}
-		for _, ln := range lines {
-			expanded = append(expanded, lineDiff{
-				Op:   df.Type,
-				Text: ln,
-			})
-		}
-	}
-
-	// We'll track how many times each line was "DiffDelete" in deleteMap
 	deleteMap := make(map[string]int)
 	var finalList []lineDiff
 
-	// First pass: whenever we see a DiffInsert that matches a line from deleteMap, we remove it (i.e. treat as moved).
-	for _, e := range expanded {
-		switch e.Op {
-		case diffmatchpatch.DiffDelete:
-			deleteMap[e.Text]++
-		case diffmatchpatch.DiffInsert:
-			if deleteMap[e.Text] > 0 {
-				// matched a moved line
-				deleteMap[e.Text]--
-			} else {
-				// real inserted line
-				finalList = append(finalList, e)
-			}
-		case diffmatchpatch.DiffEqual:
-			// keep equal lines
-			finalList = append(finalList, e)
-		}
-	}
-
-	// Now we might still have leftover lines in deleteMap that never found an Insert match.
-	// We'll re-inject them in the correct place (before the next DiffEqual or at the end).
-	results := []lineDiff{}
-	deleteMapCopy := make(map[string]int)
-	for k, v := range deleteMap {
-		deleteMapCopy[k] = v
-	}
-
-	for _, e := range finalList {
-		if e.Op == diffmatchpatch.DiffEqual {
-			// flush leftover unmatched deletes
-			for lineText, count := range deleteMapCopy {
-				for i := 0; i < count; i++ {
-					results = append(results, lineDiff{Op: diffmatchpatch.DiffDelete, Text: lineText})
+	// Primeira passada: processa todas as deleções
+	for _, df := range diffs {
+		if df.Type == diffmatchpatch.DiffDelete {
+			lines := strings.Split(df.Text, "\n")
+			for _, ln := range lines {
+				trimmed := strings.TrimSpace(ln)
+				if trimmed != "" {
+					deleteMap[trimmed]++
 				}
-				delete(deleteMapCopy, lineText)
 			}
-		}
-		results = append(results, e)
-	}
-	// flush any leftover deletes at the very end
-	for lineText, count := range deleteMapCopy {
-		for i := 0; i < count; i++ {
-			results = append(results, lineDiff{Op: diffmatchpatch.DiffDelete, Text: lineText})
 		}
 	}
 
-	// Reassemble them back into bigger Diff objects
-	return reassembleLineDiffs(results)
+	// Segunda passada: processa adições e combina com deleções
+	for _, df := range diffs {
+		if df.Type == diffmatchpatch.DiffInsert {
+			lines := strings.Split(df.Text, "\n")
+			for _, ln := range lines {
+				trimmed := strings.TrimSpace(ln)
+				if deleteMap[trimmed] > 0 {
+					deleteMap[trimmed]--
+				} else {
+					finalList = append(finalList, lineDiff{Op: diffmatchpatch.DiffInsert, Text: ln})
+				}
+			}
+		} else if df.Type != diffmatchpatch.DiffDelete {
+			// Mantém linhas iguais e outros tipos
+			lines := strings.Split(df.Text, "\n")
+			for _, ln := range lines {
+				finalList = append(finalList, lineDiff{Op: df.Type, Text: ln})
+			}
+		}
+	}
+
+	return reassembleLineDiffs(finalList)
 }
 
-// reassembleLineDiffs merges consecutive lineDiffs of the same Op back into diffmatchpatch.Diff
 func reassembleLineDiffs(lines []lineDiff) []diffmatchpatch.Diff {
 	if len(lines) == 0 {
 		return nil
@@ -468,31 +434,27 @@ func parseFilePath(diffLine string) string {
 func cleanupDiff(diff string) string {
 	lines := strings.Split(diff, "\n")
 	var cleaned []string
-	skipNext := false
+	skipContext := false
 
 	for i, line := range lines {
-		// Skip empty lines or pure whitespace changes
-		if strings.TrimSpace(line) == "" {
+		if strings.HasPrefix(line, "@@") {
+			// Reduz contexto do diff para 3 linhas
+			skipContext = false
+			cleaned = append(cleaned, line)
 			continue
 		}
 
-		// Skip comment-only changes
-		if isCommentChange(line) {
+		if skipContext && strings.HasPrefix(line, " ") {
 			continue
 		}
 
-		// Skip pure movement indicators
-		if isPureMovement(lines, i) {
-			skipNext = true
-			continue
-		}
-
-		if skipNext {
-			skipNext = false
+		if isCommentChange(line) || isPureMovement(lines, i) {
+			skipContext = true
 			continue
 		}
 
 		cleaned = append(cleaned, line)
+		skipContext = false
 	}
 
 	return strings.Join(cleaned, "\n")
@@ -500,16 +462,8 @@ func cleanupDiff(diff string) string {
 
 func isCommentChange(line string) bool {
 	line = strings.TrimSpace(line)
-	if strings.HasPrefix(line, "+//") || strings.HasPrefix(line, "-//") {
-		return true
-	}
-	if strings.HasPrefix(line, "+/*") || strings.HasPrefix(line, "-/*") {
-		return true
-	}
-	if strings.HasPrefix(line, "+*") || strings.HasPrefix(line, "-*") {
-		return true
-	}
-	return false
+	commentPattern := regexp.MustCompile(`^(\/\/|\/\*|\*|#|--|<!--|;)`)
+	return commentPattern.MatchString(line)
 }
 
 func isPureMovement(lines []string, currentIndex int) bool {
