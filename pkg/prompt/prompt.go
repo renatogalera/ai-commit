@@ -9,28 +9,47 @@ import (
 )
 
 // DefaultPromptTemplate is used if no template is configured for commit message generation.
-const DefaultPromptTemplate = `Generate a git commit message that is clear, concise, and follows the Conventional Commits format:
-- Use the format "type: subject" (e.g., "fix: correct error handling").
-- Keep the subject line under 50 characters and in the imperative mood.
-- Just send a title line that starts with the commit type, then just a description of the changes.
-- Remember, the commit is for another human to understand what has been changed, ignore unnecessary changes like line breaks, details about changed README and changes in code comments.
-- If there are breaking changes, include "BREAKING CHANGE:" in the body.
-- After the subject line, leave a blank line and then list key changes with bullet points.
-- Do not include extraneous details such as commit hash, branch name, spacing details, or formatting guidelines.
-- Avoid repeating information.
-- Ignores moved code blocks and whitespace changes
-- Excludes comment/doc changes unless substantive
-- Focuses on actual code changes
+const DefaultPromptTemplate = `Analyze the provided Git diff and generate a commit message following Conventional Commits format strictly.
 
-Key rules:
-1. Use format "type: subject" 
-2. Omit trivial changes (comments, formatting)
-3. Highlight behavior changes
+### REQUIRED FORMAT:
+type(scope): description
+
+- **type**: {COMMIT_TYPE_HINT}feat/fix/docs/style/refactor/test/chore/perf/build/ci
+- **scope** (optional): affected component/module
+- **description**: max 50 characters, imperative mood, no period
+
+### ANALYSIS RULES:
+1. **FOCUS ON FUNCTIONAL IMPACT**: ignore cosmetic changes (comments, spacing, formatting)
+2. **IDENTIFY INTENT**: what does this change solve/add/improve for the end user?
+3. **BE SPECIFIC**: prefer "fix user authentication timeout" over "fix bug"
+4. **PRIORITIZE BREAKING CHANGES**: if incompatible changes exist, use "BREAKING CHANGE:" in body
+
+### EXCLUSION FILTERS:
+- Changes in lock files (go.mod, package-lock.json, etc.)
+- Comment-only or inline documentation changes
+- Code reformatting without logical changes
+- Code block movement without functional alterations
+
+### OUTPUT STRUCTURE:
+**Line 1**: type(scope): description
+**Line 2**: [empty]
+**Lines 3+**: Key change details (if necessary)
+- Use bullet points for multiple changes
+- Explain "why" when not obvious
+- Include "BREAKING CHANGE:" if applicable
+
+### QUALITY EXAMPLES:
+✅ feat(auth): add OAuth2 Google integration
+✅ fix(api): resolve memory leak in request handler
+✅ refactor(db): extract connection pool to separate module
+❌ update files (too vague)
+❌ fix: fix bug in code (redundant)
+❌ feat: add some changes to the system (not specific)
 
 {COMMIT_TYPE_HINT}
-- Write the message in {LANGUAGE}.
+Write the message in {LANGUAGE}.
 
-Diff:
+### DIFF TO ANALYZE:
 {DIFF}
 {ADDITIONAL_CONTEXT}
 `
