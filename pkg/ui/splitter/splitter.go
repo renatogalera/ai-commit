@@ -39,6 +39,10 @@ type Model struct {
 	commitResult  string
 	totalChunks   int // Total chunks count for status
 	selectedCount int // Count of selected chunks for status
+	
+	// Terminal dimensions
+	width  int
+	height int
 }
 
 // NewSplitterModel creates a new splitter model.
@@ -56,15 +60,22 @@ func NewSplitterModel(chunks []git.DiffChunk, client ai.AIClient) Model {
 
 // NewProgram creates a new Bubble Tea program for splitting.
 func NewProgram(m Model) *tea.Program {
-	return tea.NewProgram(m)
+	return tea.NewProgram(m, tea.WithAltScreen())
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return tea.Batch(
+		tea.EnterAltScreen,
+	)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+		
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":

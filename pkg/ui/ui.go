@@ -148,6 +148,10 @@ type Model struct {
 
 	// styleReview holds optional suggestions from AI for commit style:
 	styleReview string
+	
+	// Terminal dimensions
+	width  int
+	height int
 }
 
 // NewUIModel creates a new TUI model.
@@ -163,7 +167,8 @@ func NewUIModel(
 	ta := textarea.New()
 	ta.Placeholder = "Edit your commit message or additional prompt here..."
 	ta.Prompt = "> "
-	ta.SetWidth(50)
+	// Initial dimensions will be set by WindowSizeMsg
+	ta.SetWidth(80)
 	ta.SetHeight(10)
 	ta.ShowLineNumbers = false
 
@@ -197,12 +202,14 @@ func NewUIModel(
 
 // NewProgram creates a new Bubble Tea program with the given model.
 func NewProgram(m Model) *tea.Program {
-	return tea.NewProgram(m, tea.WithAltScreen())
+	return tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 }
 
 // Init is the Bubble Tea initialization command.
 func (m Model) Init() tea.Cmd {
-	return nil
+	return tea.Batch(
+		tea.EnterAltScreen,
+	)
 }
 
 // --- UPDATE ------------------------------------------------------------------
@@ -211,8 +218,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		
+		// Update textarea dimensions based on terminal size
+		textareaWidth := min(m.width-4, 80) // Max width of 80 chars
+		textareaHeight := min(m.height-10, 20) // Leave room for UI elements
+		m.textarea.SetWidth(textareaWidth)
+		m.textarea.SetHeight(textareaHeight)
+		
+		return m, nil
 
 	case tea.KeyMsg:
+		// Handle editing states first to prevent key conflicts
+		if m.state == stateEditing || m.state == stateEditingPrompt {
+			var tcmd tea.Cmd
+			m.textarea, tcmd = m.textarea.Update(msg)
+			
+			// Only handle specific control keys in editing modes
+			switch msg.String() {
+			case "ctrl+s":
+				if m.state == stateEditing {
+					m.commitMsg = m.textarea.Value()
+					m.state = stateShowCommit
+				} else if m.state == stateEditingPrompt {
+					userPrompt := m.textarea.Value()
+					m.state = stateGenerating
+					m.spinner = spinner.New()
+					m.spinner.Spinner = spinner.Dot
+					m.regenCount++
+					m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, userPrompt, "")
+					return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
+				}
+			case "esc":
+				m.state = stateShowCommit
+			}
+			return m, tcmd
+		}
+		
+		// Handle global keys for non-editing states
 		if key.Matches(msg, keyMap.Quit) {
 			return m, tea.Quit
 		}
@@ -284,36 +329,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-		case stateEditing:
-			var tcmd tea.Cmd
-			m.textarea, tcmd = m.textarea.Update(msg)
-			cmd = tcmd
-			switch msg.String() {
-			case "ctrl+s":
-				m.commitMsg = m.textarea.Value()
-				m.state = stateShowCommit
-			case "esc":
-				m.state = stateShowCommit
-			}
-			return m, cmd
-
-		case stateEditingPrompt:
-			var tcmd tea.Cmd
-			m.textarea, tcmd = m.textarea.Update(msg)
-			cmd = tcmd
-			switch msg.String() {
-			case "ctrl+s":
-				userPrompt := m.textarea.Value()
-				m.state = stateGenerating
-				m.spinner = spinner.New()
-				m.spinner.Spinner = spinner.Dot
-				m.regenCount++
-				m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, userPrompt, "")
-				return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
-			case "esc":
-				m.state = stateShowCommit
-			}
-			return m, cmd
+		// These cases are now handled at the beginning of tea.KeyMsg
 
 		case stateShowDiff:
 			if key.Matches(msg, keyMap.Quit) {
@@ -400,18 +416,22 @@ func (m Model) viewShowCommit() string {
 		m.commitType, (m.maxRegens - m.regenCount), m.maxRegens, m.language)
 	infoLine := infoLineStyle.Render(infoText)
 
-	// 3) The commit box
-	content := commitBoxStyle.Render(m.commitMsg)
+	// 3) The commit box - adjust width based on terminal size
+	boxWidth := min(m.width-4, 100) // Leave some margin, max 100 chars
+	commitBoxStyleAdaptive := commitBoxStyle.Width(boxWidth)
+	content := commitBoxStyleAdaptive.Render(m.commitMsg)
 
 	// 4) If styleReview is not trivial or "no issues found", show it
 	styleReviewSection := ""
 	if trimmed := strings.TrimSpace(m.styleReview); trimmed != "" &&
 		!strings.Contains(strings.ToLower(trimmed), "no issues found") {
+		boxWidth := min(m.width-4, 100) // Same width as commit box
 		styleReviewSection = lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("204")).
 			Padding(1, 2).
 			Margin(1, 1).
+			Width(boxWidth).
 			Render("Style Review Suggestions:\n\n" + trimmed)
 	}
 

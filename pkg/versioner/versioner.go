@@ -138,6 +138,10 @@ type semverModel struct {
 	selected      bool
 	selectedValue string
 	currentVer    string
+	
+	// Terminal dimensions
+	width  int
+	height int
 }
 
 func NewSemverModel(currentVersion string) semverModel {
@@ -162,11 +166,18 @@ func NewSemverModel(currentVersion string) semverModel {
 }
 
 func (m semverModel) Init() tea.Cmd {
-	return nil
+	return tea.Batch(
+		tea.EnterAltScreen,
+	)
 }
 
 func (m semverModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+		
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
@@ -218,7 +229,7 @@ func parseVersionTriplet(ver string) (int, int, int) {
 // RunSemVerTUI launches the semantic version TUI and returns the selected version.
 func RunSemVerTUI(ctx context.Context, currentVersion string) (string, error) {
 	model := NewSemverModel(currentVersion)
-	program := tea.NewProgram(model)
+	program := tea.NewProgram(model, tea.WithAltScreen())
 	finalModel, err := program.Run()
 	if err != nil {
 		return "", err
