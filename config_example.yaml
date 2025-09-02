@@ -7,17 +7,25 @@ authorEmail: "youremail@example.com"
 # Which AI provider to use. Valid options: "openai", "google" or "anthropic"
 provider: "phind" # Current Phind model is free
 
-# Phind model to use.
+# Phind model and base URL.
 phindModel: "Phind-70B"
+phindBaseURL: "https://https.extension.phind.com/agent/"
 
 # OpenAI model to use.
 openaiModel: "gpt-4olatest"
+openaiBaseURL: "https://api.openai.com/v1"
 
 # Google model to use.
 googleModel: "models/gemini-2.5-flash"
+googleBaseURL: "https://generativelanguage.googleapis.com"
 
 # Anthropic model to use.
 anthropicModel: "claude-3-5-sonnet-latest"
+anthropicBaseURL: "https://api.anthropic.com/v1"
+
+# Deepseek model and base URL.
+deepseekModel: "deepseek-chat"
+deepseekBaseURL: "https://api.deepseek.com/v1"
 
 # API key for Phind. Overridden by the --phindApiKey flag or the PHIND_API_KEY environment variable.
 phindApiKey: "" # Phind does not require an API key by default

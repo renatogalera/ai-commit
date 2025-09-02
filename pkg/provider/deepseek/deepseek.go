@@ -16,7 +16,7 @@ type DeepseekClient struct {
 	model  string
 }
 
-func NewDeepseekClient(apiKey, model string) (*DeepseekClient, error) {
+func NewDeepseekClient(apiKey, model, baseURL string) (*DeepseekClient, error) {
 	if apiKey == "" {
 		return nil, errors.New("deepseek API key is required")
 	}
@@ -24,9 +24,13 @@ func NewDeepseekClient(apiKey, model string) (*DeepseekClient, error) {
 		return nil, errors.New("deepseek model is required")
 	}
 
-	config := gogpt.DefaultConfig(apiKey)
-	config.BaseURL = "https://api.deepseek.com/v1"
-	client := gogpt.NewClientWithConfig(config)
+	cfg := gogpt.DefaultConfig(apiKey)
+	if strings.TrimSpace(baseURL) != "" {
+		cfg.BaseURL = baseURL
+	} else {
+		cfg.BaseURL = "https://api.deepseek.com/v1"
+	}
+	client := gogpt.NewClientWithConfig(cfg)
 
 	return &DeepseekClient{
 		BaseAIClient: ai.BaseAIClient{Provider: "deepseek"},
