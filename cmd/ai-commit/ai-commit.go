@@ -42,6 +42,11 @@ var (
 	anthropicAPIKeyFlag  string
 	deepseekAPIKeyFlag   string
 	phindAPIKeyFlag      string
+	openaiBaseURLFlag    string
+	googleBaseURLFlag    string
+	anthropicBaseURLFlag string
+	deepseekBaseURLFlag  string
+	phindBaseURLFlag     string
 	ollamaBaseURLFlag    string
 	commitTypeFlag       string
 	templateFlag         string
@@ -81,6 +86,11 @@ func init() {
 	rootCmd.Flags().StringVar(&anthropicAPIKeyFlag, "anthropicApiKey", "", "API key for Anthropic provider (or env ANTHROPIC_API_KEY)")
 	rootCmd.Flags().StringVar(&deepseekAPIKeyFlag, "deepseekApiKey", "", "API key for Deepseek provider (or env DEEPSEEK_API_KEY)")
 	rootCmd.Flags().StringVar(&phindAPIKeyFlag, "phindApiKey", "", "API key for Phind provider (or env PHIND_API_KEY)")
+	rootCmd.Flags().StringVar(&openaiBaseURLFlag, "openaiBaseURL", "", "Base URL for OpenAI provider")
+	rootCmd.Flags().StringVar(&googleBaseURLFlag, "googleBaseURL", "", "Base URL for Google provider")
+	rootCmd.Flags().StringVar(&anthropicBaseURLFlag, "anthropicBaseURL", "", "Base URL for Anthropic provider")
+	rootCmd.Flags().StringVar(&deepseekBaseURLFlag, "deepseekBaseURL", "", "Base URL for Deepseek provider")
+	rootCmd.Flags().StringVar(&phindBaseURLFlag, "phindBaseURL", "", "Base URL for Phind provider")
 	rootCmd.Flags().StringVar(&ollamaBaseURLFlag, "ollamaBaseURL", "", "Base URL for Ollama provider")
 	rootCmd.Flags().StringVar(&commitTypeFlag, "commit-type", "", "Commit type (e.g., feat, fix)")
 	rootCmd.Flags().StringVar(&templateFlag, "template", "", "Commit message template")
@@ -187,7 +197,14 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 		if modelFlag != "" {
 			model = modelFlag
 		}
-		return openai.NewOpenAIClient(key, model), nil
+		baseURL := cfg.OpenAIBaseURL
+		if openaiBaseURLFlag != "" {
+			baseURL = openaiBaseURLFlag
+		}
+		if baseURL == "" {
+			baseURL = config.DefaultOpenAIBaseURL
+		}
+		return openai.NewOpenAIClient(key, model, baseURL), nil
 
 	case "google":
 		key, err := config.ResolveAPIKey(googleAPIKeyFlag, "GOOGLE_API_KEY", cfg.GoogleAPIKey, "google")
@@ -198,7 +215,14 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 		if modelFlag != "" {
 			model = modelFlag
 		}
-		googleClient, err := google.NewGoogleProClient(ctx, key, model)
+		baseURL := cfg.GoogleBaseURL
+		if googleBaseURLFlag != "" {
+			baseURL = googleBaseURLFlag
+		}
+		if baseURL == "" {
+			baseURL = config.DefaultGoogleBaseURL
+		}
+		googleClient, err := google.NewGoogleProClient(ctx, key, model, baseURL)
 		if err != nil {
 			return nil, fmt.Errorf("falha ao inicializar o cliente Google: %w", err)
 		}
@@ -213,7 +237,14 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 		if modelFlag != "" {
 			model = modelFlag
 		}
-		anthroClient, err := anthropic.NewAnthropicClient(key, model)
+		baseURL := cfg.AnthropicBaseURL
+		if anthropicBaseURLFlag != "" {
+			baseURL = anthropicBaseURLFlag
+		}
+		if baseURL == "" {
+			baseURL = config.DefaultAnthropicBaseURL
+		}
+		anthroClient, err := anthropic.NewAnthropicClient(key, model, baseURL)
 		if err != nil {
 			return nil, fmt.Errorf("falha ao inicializar o cliente Anthropic: %w", err)
 		}
@@ -228,7 +259,14 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 		if modelFlag != "" {
 			model = modelFlag
 		}
-		deepseekClient, err := deepseek.NewDeepseekClient(key, model)
+		baseURL := cfg.DeepseekBaseURL
+		if deepseekBaseURLFlag != "" {
+			baseURL = deepseekBaseURLFlag
+		}
+		if baseURL == "" {
+			baseURL = config.DefaultDeepseekBaseURL
+		}
+		deepseekClient, err := deepseek.NewDeepseekClient(key, model, baseURL)
 		if err != nil {
 			return nil, fmt.Errorf("falha ao inicializar o cliente Deepseek: %w", err)
 		}
@@ -243,7 +281,14 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 		if modelFlag != "" {
 			model = modelFlag
 		}
-		return phind.NewPhindClient(key, model), nil
+		baseURL := cfg.PhindBaseURL
+		if phindBaseURLFlag != "" {
+			baseURL = phindBaseURLFlag
+		}
+		if baseURL == "" {
+			baseURL = config.DefaultPhindBaseURL
+		}
+		return phind.NewPhindClient(key, model, baseURL), nil
 
 	case "ollama":
 		baseURL := cfg.OllamaBaseURL

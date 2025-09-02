@@ -17,10 +17,14 @@ type OpenAIClient struct {
 	model  string
 }
 
-func NewOpenAIClient(key, model string) *OpenAIClient {
+func NewOpenAIClient(key, model, baseURL string) *OpenAIClient {
+	cfg := gogpt.DefaultConfig(key)
+	if strings.TrimSpace(baseURL) != "" {
+		cfg.BaseURL = baseURL
+	}
 	return &OpenAIClient{
 		BaseAIClient: ai.BaseAIClient{Provider: "openai"}, // Initialize base client
-		client:       gogpt.NewClient(key),
+		client:       gogpt.NewClientWithConfig(cfg),
 		model:        model,
 	}
 }

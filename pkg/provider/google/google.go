@@ -3,6 +3,7 @@ package google
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/generative-ai-go/genai"
 	"google.golang.org/api/option"
@@ -22,8 +23,12 @@ func NewClient(client *genai.GenerativeModel) *GoogleClient {
 	}
 }
 
-func NewGoogleProClient(ctx context.Context, apiKey string, modelName string) (*genai.GenerativeModel, error) {
-	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+func NewGoogleProClient(ctx context.Context, apiKey string, modelName string, baseURL string) (*genai.GenerativeModel, error) {
+	opts := []option.ClientOption{option.WithAPIKey(apiKey)}
+	if strings.TrimSpace(baseURL) != "" {
+		opts = append(opts, option.WithEndpoint(baseURL))
+	}
+	client, err := genai.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("error creating google client: %w", err)
 	}

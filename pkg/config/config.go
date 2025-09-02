@@ -11,14 +11,19 @@ import (
 )
 
 const (
-	DefaultProvider       = "phind"
-	DefaultOpenAIModel    = "chatgpt-4o-latest"
-	DefaultGoogleModel    = "models/gemini-2.5-flash"
-	DefaultAnthropicModel = "claude-3-7-sonnet-latest"
-	DefaultDeepseekModel  = "deepseek-chat"
-	DefaultPhindModel     = "Phind-70B"
-	DefaultOllamaModel    = "llama2"
-	DefaultOllamaBaseURL  = "http://localhost:11434"
+	DefaultProvider         = "phind"
+	DefaultOpenAIModel      = "chatgpt-4o-latest"
+	DefaultGoogleModel      = "models/gemini-2.5-flash"
+	DefaultAnthropicModel   = "claude-3-7-sonnet-latest"
+	DefaultDeepseekModel    = "deepseek-chat"
+	DefaultPhindModel       = "Phind-70B"
+	DefaultOllamaModel      = "llama2"
+	DefaultOpenAIBaseURL    = "https://api.openai.com/v1"
+	DefaultGoogleBaseURL    = "https://generativelanguage.googleapis.com"
+	DefaultAnthropicBaseURL = "https://api.anthropic.com/v1"
+	DefaultDeepseekBaseURL  = "https://api.deepseek.com/v1"
+	DefaultPhindBaseURL     = "https://https.extension.phind.com/agent/"
+	DefaultOllamaBaseURL    = "http://localhost:11434"
 )
 
 var (
@@ -44,19 +49,24 @@ type Config struct {
 	CommitTypes      []CommitTypeConfig `yaml:"commitTypes,omitempty"`
 	LockFiles        []string           `yaml:"lockFiles,omitempty"`
 
-	OpenAIAPIKey    string `yaml:"openAiApiKey,omitempty"`
-	OpenAIModel     string `yaml:"openaiModel,omitempty"`
-	GoogleAPIKey    string `yaml:"googleApiKey,omitempty"`
-	GoogleModel     string `yaml:"googleModel,omitempty"`
-	AnthropicAPIKey string `yaml:"anthropicApiKey,omitempty"`
-	AnthropicModel  string `yaml:"anthropicModel,omitempty"`
-	DeepseekAPIKey  string `yaml:"deepseekApiKey,omitempty"`
-	DeepseekModel   string `yaml:"deepseekModel,omitempty"`
-	PhindAPIKey     string `yaml:"phindApiKey,omitempty"`
-	PhindModel      string `yaml:"phindModel,omitempty"`
-	OllamaBaseURL   string `yaml:"ollamaBaseURL,omitempty"`
-	OllamaModel     string `yaml:"ollamaModel,omitempty"`
-	PromptTemplate  string `yaml:"promptTemplate,omitempty"`
+	OpenAIAPIKey     string `yaml:"openAiApiKey,omitempty"`
+	OpenAIModel      string `yaml:"openaiModel,omitempty"`
+	OpenAIBaseURL    string `yaml:"openaiBaseURL,omitempty"`
+	GoogleAPIKey     string `yaml:"googleApiKey,omitempty"`
+	GoogleModel      string `yaml:"googleModel,omitempty"`
+	GoogleBaseURL    string `yaml:"googleBaseURL,omitempty"`
+	AnthropicAPIKey  string `yaml:"anthropicApiKey,omitempty"`
+	AnthropicModel   string `yaml:"anthropicModel,omitempty"`
+	AnthropicBaseURL string `yaml:"anthropicBaseURL,omitempty"`
+	DeepseekAPIKey   string `yaml:"deepseekApiKey,omitempty"`
+	DeepseekModel    string `yaml:"deepseekModel,omitempty"`
+	DeepseekBaseURL  string `yaml:"deepseekBaseURL,omitempty"`
+	PhindAPIKey      string `yaml:"phindApiKey,omitempty"`
+	PhindModel       string `yaml:"phindModel,omitempty"`
+	PhindBaseURL     string `yaml:"phindBaseURL,omitempty"`
+	OllamaBaseURL    string `yaml:"ollamaBaseURL,omitempty"`
+	OllamaModel      string `yaml:"ollamaModel,omitempty"`
+	PromptTemplate   string `yaml:"promptTemplate,omitempty"`
 
 	AuthorName  string `yaml:"authorName,omitempty"`
 	AuthorEmail string `yaml:"authorEmail,omitempty"`
@@ -86,22 +96,27 @@ func LoadOrCreateConfig() (*Config, error) {
 	// If config file does not exist, create a default config.
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultCfg := &Config{
-			Provider:        DefaultProvider,
-			OpenAIAPIKey:    "",
-			OpenAIModel:     DefaultOpenAIModel,
-			GoogleAPIKey:    "",
-			GoogleModel:     DefaultGoogleModel,
-			AnthropicAPIKey: "",
-			AnthropicModel:  DefaultAnthropicModel,
-			DeepseekAPIKey:  "",
-			DeepseekModel:   DefaultDeepseekModel,
-			PhindAPIKey:     "",
-			PhindModel:      DefaultPhindModel,
-			OllamaBaseURL:   DefaultOllamaBaseURL,
-			OllamaModel:     DefaultOllamaModel,
-			AuthorName:      DefaultAuthorName,
-			AuthorEmail:     DefaultAuthorEmail,
-			LockFiles:       []string{"go.mod", "go.sum"},
+			Provider:         DefaultProvider,
+			OpenAIAPIKey:     "",
+			OpenAIModel:      DefaultOpenAIModel,
+			OpenAIBaseURL:    DefaultOpenAIBaseURL,
+			GoogleAPIKey:     "",
+			GoogleModel:      DefaultGoogleModel,
+			GoogleBaseURL:    DefaultGoogleBaseURL,
+			AnthropicAPIKey:  "",
+			AnthropicModel:   DefaultAnthropicModel,
+			AnthropicBaseURL: DefaultAnthropicBaseURL,
+			DeepseekAPIKey:   "",
+			DeepseekModel:    DefaultDeepseekModel,
+			DeepseekBaseURL:  DefaultDeepseekBaseURL,
+			PhindAPIKey:      "",
+			PhindModel:       DefaultPhindModel,
+			PhindBaseURL:     DefaultPhindBaseURL,
+			OllamaBaseURL:    DefaultOllamaBaseURL,
+			OllamaModel:      DefaultOllamaModel,
+			AuthorName:       DefaultAuthorName,
+			AuthorEmail:      DefaultAuthorEmail,
+			LockFiles:        []string{"go.mod", "go.sum"},
 			// Default commit types and emojis:
 			CommitTypes: []CommitTypeConfig{
 				{Type: "feat", Emoji: "✨"},

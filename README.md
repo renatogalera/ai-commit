@@ -86,18 +86,23 @@ provider: "phind"
 
 phindApiKey: ""             # Phind does not require an API key by default
 phindModel: "Phind-70B"      # Current Phind model is free
+phindBaseURL: "https://https.extension.phind.com/agent/"
 
 openAiApiKey: "sk-YOUR-OPENAI-KEY"
 openaiModel: "gpt-4o-latest"
+openaiBaseURL: "https://api.openai.com/v1"
 
 googleApiKey: "YOUR-GOOGLE-KEY"
 googleModel: "models/google-2.0-flash"
+googleBaseURL: "https://generativelanguage.googleapis.com"
 
 anthropicApiKey: "sk-YOUR-ANTHROPIC-KEY"
 anthropicModel: "claude-3-5-sonnet-latest"
+anthropicBaseURL: "https://api.anthropic.com/v1"
 
 deepseekApiKey: "YOUR-DEEPSEEK-KEY"
 deepseekModel: "deepseek-chat"
+deepseekBaseURL: "https://api.deepseek.com/v1"
 
 ollamaBaseURL: "http://localhost:11434"
 ollamaModel: "llama2"
@@ -179,7 +184,7 @@ API Keys via Environment Variables:
 *   `--provider`: AI provider selection (`openai`, `google`, `anthropic`, `deepseek`, `phind`, `ollama`).
 *   `--model`: Specific model choice per provider (e.g., `gpt-4`, `models/google-2.0-flash`, `claude-3-5-sonnet-latest`, `deepseek-chat`, `Phind-70B`, `llama2`).
 *   `--apiKey`, `--googleApiKey`, `--anthropicApiKey`, `--deepseekApiKey`, `--phindApiKey`: API keys for each provider.
-*   `--ollamaBaseURL`: Base URL for Ollama provider (default: http://localhost:11434).
+*   `--openaiBaseURL`, `--googleBaseURL`, `--anthropicBaseURL`, `--deepseekBaseURL`, `--phindBaseURL`, `--ollamaBaseURL`: Base URLs for each provider (Ollama defaults to http://localhost:11434).
 *   `--commit-type`: Force a commit type (e.g., `fix`, `feat`) for non-interactive use or AI guidance.
 *   `--template`: Custom template for commit messages, wrapping AI output.
 *   `--prompt` *(Deprecated)*: Use `promptTemplate` in `config.yaml` for persistent prompt customization instead.
