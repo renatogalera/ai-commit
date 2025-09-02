@@ -16,11 +16,15 @@ type AnthropicClient struct {
 	model  string
 }
 
-func NewAnthropicClient(apiKey, model string) (*AnthropicClient, error) {
+func NewAnthropicClient(apiKey, model, baseURL string) (*AnthropicClient, error) {
 	if apiKey == "" {
 		return nil, errors.New("anthropic API key is required")
 	}
-	client := anthropicSDK.NewClient(apiKey)
+	opts := []anthropicSDK.ClientOption{}
+	if strings.TrimSpace(baseURL) != "" {
+		opts = append(opts, anthropicSDK.WithBaseURL(baseURL))
+	}
+	client := anthropicSDK.NewClient(apiKey, opts...)
 	if client == nil {
 		return nil, errors.New("failed to create Anthropic client")
 	}

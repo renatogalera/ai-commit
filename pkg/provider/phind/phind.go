@@ -20,9 +20,12 @@ type PhindClient struct {
 	token      string
 }
 
-func NewPhindClient(token, model string) *PhindClient {
+func NewPhindClient(token, model, baseURL string) *PhindClient {
 	if model == "" {
 		model = "Phind-70B"
+	}
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = "https://https.extension.phind.com/agent/"
 	}
 	return &PhindClient{
 		BaseAIClient: ai.BaseAIClient{Provider: "phind"},
@@ -30,7 +33,7 @@ func NewPhindClient(token, model string) *PhindClient {
 			Timeout: 60 * time.Second,
 		},
 		model:      model,
-		apiBaseURL: "https://https.extension.phind.com/agent/",
+		apiBaseURL: baseURL,
 		token:      token,
 	}
 }
