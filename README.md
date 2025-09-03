@@ -6,12 +6,13 @@
 
 It supports:
 
+- **Phind** (current model is free, enjoy!)
 - **OpenAI**
 - **Google Gemini**
 - **Anthropic Claude**
 - **DeepSeek**
-- **Phind** (current model is free)
 - **Ollama** (local AI models)
+- **OpenRouter** (access to multiple open-source models)
 
 Boost your commit quality, enforce standards, and save valuable time with AI-Commit, your all-in-one AI assistant for Git workflows.
 
@@ -66,7 +67,7 @@ sudo mv ai-commit /usr/local/bin/
 - **Interactive Commit Splitting (`--interactive-split`)**: Gain granular control over your commits with chunk-based staging and commit message generation for partial commits.
 - **Emoji Support (`--emoji`)**: Add a touch of visual flair to your commit history with automatically included emojis based on commit types.
 - **Customizable Templates (`--template`)**: Tailor commit messages to your team's style with custom templates, incorporating dynamic values like branch names.
-- **Multi-Provider AI Support**: Choose the best AI for each task by switching seamlessly between OpenAI, Google, Anthropic, DeepSeek, and Phind.
+- **Multi-Provider AI Support**: Choose the best AI for each task by switching seamlessly between OpenAI, Google, Anthropic, DeepSeek, OpenRouter, and Phind.
 - **Configurable and Filterable**: Adapt AI-Commit to your projects with customizable commit types and prompt templates. Filter lock file diffs for cleaner, AI-focused message generation and reviews.
 - **Diff View in TUI**: Inspect complete Git diffs within the TUI (`l` key) for thorough pre-commit reviews.
 - **Enhanced Splitter UI**: Benefit from improved interactive splitting with chunk selection inversion and clear status updates.
@@ -83,30 +84,51 @@ authorName: "Your Name"
 authorEmail: "youremail@example.com"
 
 provider: "phind"
+limits:
+  diff:
+    enabled: false
+    maxChars: 0
+  prompt:
+    enabled: false
+    maxChars: 0
 
-phindApiKey: ""             # Phind does not require an API key by default
-phindModel: "Phind-70B"      # Current Phind model is free
-phindBaseURL: "https://https.extension.phind.com/agent/"
-
-openAiApiKey: "sk-YOUR-OPENAI-KEY"
-openaiModel: "gpt-4o-latest"
-openaiBaseURL: "https://api.openai.com/v1"
-
-googleApiKey: "YOUR-GOOGLE-KEY"
-googleModel: "models/google-2.0-flash"
-googleBaseURL: "https://generativelanguage.googleapis.com"
-
-anthropicApiKey: "sk-YOUR-ANTHROPIC-KEY"
-anthropicModel: "claude-3-5-sonnet-latest"
-anthropicBaseURL: "https://api.anthropic.com/v1"
-
-deepseekApiKey: "YOUR-DEEPSEEK-KEY"
-deepseekModel: "deepseek-chat"
-deepseekBaseURL: "https://api.deepseek.com/v1"
-
-ollamaBaseURL: "http://localhost:11434"
-ollamaModel: "llama2"
-
+# Preferred provider config.
+providers:
+  phind:
+    apiKey: ""             # Phind does not require an API key by default
+    model: "Phind-70B"
+    baseURL: "https://https.extension.phind.com/agent/"
+  openai:
+    apiKey: "sk-YOUR-OPENAI-KEY"
+    model: "gpt-5-nano"
+    baseURL: "https://api.openai.com/v1"
+  google:
+    apiKey: "YOUR-GOOGLE-KEY"
+    model: "models/gemini-2.5-flash"
+    baseURL: "https://generativelanguage.googleapis.com"
+  anthropic:
+    apiKey: "sk-YOUR-ANTHROPIC-KEY"
+    model: "claude-sonnet-4-20250514"
+    baseURL: "https://api.anthropic.com/v1"
+  deepseek:
+    apiKey: "YOUR-DEEPSEEK-KEY"
+    model: "deepseek-chat"
+    baseURL: "https://api.deepseek.com/v1"
+  openrouter:
+    apiKey: "YOUR-OPENROUTER-KEY"
+    model: "openrouter/auto"
+    baseURL: "https://openrouter.ai/api/v1"
+  ollama:
+    apiKey: ""             # Ollama does not require an API key by default
+    model: "llama3"
+    baseURL: "http://localhost:11434"
+limits:
+  diff:
+    enabled: false
+    maxChars: 0
+  prompt:
+    enabled: false
+    maxChars: 0
 semanticRelease: false
 interactiveSplit: false
 enableEmoji: false
@@ -142,15 +164,10 @@ lockFiles: # Specify lock files to be ignored in diffs for commit messages and r
 
 > **Note**: Command-line flags always take precedence over configuration file values. API keys can be set via environment variables or within `config.yaml`. You can now also customize the `promptTemplate` in this file to adjust the behavior of both commit message generation and code reviews.
 
-API Keys via Environment Variables:
+Environment Overrides 
 
-- `OPENAI_API_KEY`
-- `GOOGLE_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `DEEPSEEK_API_KEY`
-- `PHIND_API_KEY`
-
----
+- `${PROVIDER}_API_KEY` and `${PROVIDER}_BASE_URL`, with `PROVIDER` in uppercase.
+  Examples: `OPENAI_API_KEY`, `OPENAI_BASE_URL`; `GOOGLE_API_KEY`, `GOOGLE_BASE_URL`; `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`; `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`; `PHIND_API_KEY`, `PHIND_BASE_URL`; `OLLAMA_BASE_URL`.
 
 ## 🚀 Basic Usage
 
@@ -181,10 +198,13 @@ API Keys via Environment Variables:
 
 **Main Flags**:
 
-*   `--provider`: AI provider selection (`openai`, `google`, `anthropic`, `deepseek`, `phind`, `ollama`).
-*   `--model`: Specific model choice per provider (e.g., `gpt-4`, `models/google-2.0-flash`, `claude-3-5-sonnet-latest`, `deepseek-chat`, `Phind-70B`, `llama2`).
-*   `--apiKey`, `--googleApiKey`, `--anthropicApiKey`, `--deepseekApiKey`, `--phindApiKey`: API keys for each provider.
-*   `--openaiBaseURL`, `--googleBaseURL`, `--anthropicBaseURL`, `--deepseekBaseURL`, `--phindBaseURL`, `--ollamaBaseURL`: Base URLs for each provider (Ollama defaults to http://localhost:11434).
+*   `--provider`: AI provider selection (`openai`, `google`, `anthropic`, `deepseek`, `phind`, `ollama`, `openrouter`, `your_provider`).
+*   `--model`: Specific model choice for the selected provider (overrides `providers.<name>.model`).
+*   `--apiKey`: API key for the selected provider (overrides `providers.<name>.apiKey` or env `${PROVIDER}_API_KEY`).
+*   `--baseURL`: Base URL for the selected provider (overrides `providers.<name>.baseURL` or env `${PROVIDER}_BASE_URL`).
+*   Limits (config.yaml):
+    - `limits.diff.enabled` + `limits.diff.maxChars` to summarize/truncate large diffs before sending to AI.
+    - `limits.prompt.enabled` + `limits.prompt.maxChars` to hard-limit total prompt size.
 *   `--commit-type`: Force a commit type (e.g., `fix`, `feat`) for non-interactive use or AI guidance.
 *   `--template`: Custom template for commit messages, wrapping AI output.
 *   `--prompt` *(Deprecated)*: Use `promptTemplate` in `config.yaml` for persistent prompt customization instead.
@@ -252,6 +272,7 @@ API Keys via Environment Variables:
     ai-commit --provider=deepseek --model=deepseek-chat --deepseekApiKey=...
     ai-commit --provider=phind --model=Phind-70B           # Phind model is currently free; API key is optional
     ai-commit --provider=ollama --model=llama2 --ollamaBaseURL=http://localhost:11434  # Use local Ollama instance
+    ai-commit --provider=openrouter --model=openrouter/auto --openrouterApiKey=...
     ```
 
 7.  **Interactive Split Commit**:

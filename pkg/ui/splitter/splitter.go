@@ -1,18 +1,19 @@
 package splitter
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"os/exec"
-	"strings"
-	"time"
+    "context"
+    "fmt"
+    "os"
+    "os/exec"
+    "strings"
+    "time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+    tea "github.com/charmbracelet/bubbletea"
+    "github.com/charmbracelet/lipgloss"
 
-	"github.com/renatogalera/ai-commit/pkg/ai"
-	"github.com/renatogalera/ai-commit/pkg/git"
+    "github.com/renatogalera/ai-commit/pkg/ai"
+    "github.com/renatogalera/ai-commit/pkg/config"
+    "github.com/renatogalera/ai-commit/pkg/git"
 )
 
 type splitterState int
@@ -210,30 +211,48 @@ func buildPatch(chunks []git.DiffChunk, selected map[int]bool) (string, error) {
 }
 
 func generatePartialCommitMessage(ctx context.Context, diff string, client ai.AIClient) (string, error) {
-	prompt := fmt.Sprintf(`Generate a commit message for the following partial diff.
+    cfg, _ := config.LoadOrCreateConfig()
+    if cfg != nil && cfg.Limits.Diff.Enabled && cfg.Limits.Diff.MaxChars > 0 {
+        if summarized, did := client.MaybeSummarizeDiff(diff, cfg.Limits.Diff.MaxChars); did {
+            diff = summarized
+        }
+    }
+    prompt := fmt.Sprintf(`Generate a commit message for the following partial diff.
 The message must follow Conventional Commits style.
 Output only the commit message.
 
 Diff:
 %s
 `, diff)
-	msg, err := client.GetCommitMessage(ctx, prompt)
-	if err != nil {
-		return "", fmt.Errorf("AI error: %w", err)
-	}
-	return strings.TrimSpace(msg), nil
+    if cfg != nil && cfg.Limits.Prompt.Enabled && cfg.Limits.Prompt.MaxChars > 0 {
+        if len(prompt) > cfg.Limits.Prompt.MaxChars {
+            limit := cfg.Limits.Prompt.MaxChars
+            if limit > 3 { limit -= 3 }
+            prompt = prompt[:limit] + "..."
+        }
+    }
+    msg, err := client.GetCommitMessage(ctx, prompt)
+    if err != nil {
+        return "", fmt.Errorf("AI error: %w", err)
+    }
+    return strings.TrimSpace(msg), nil
 }
 
 func RunInteractiveSplit(ctx context.Context, client ai.AIClient) error {
-	diff, err := git.GetGitDiffIgnoringMoves(ctx)
-	if err != nil {
-		return err
-	}
-	diff = git.FilterLockFiles(diff, []string{"go.mod", "go.sum"})
-	if strings.TrimSpace(diff) == "" {
-		fmt.Println("No changes to commit (after filtering lock files). Did you stage your changes?")
-		return nil
-	}
+    cfg, _ := config.LoadOrCreateConfig()
+    diff, err := git.GetGitDiffIgnoringMoves(ctx)
+    if err != nil {
+        return err
+    }
+    lockFiles := []string{"go.mod", "go.sum"}
+    if cfg != nil && len(cfg.LockFiles) > 0 {
+        lockFiles = cfg.LockFiles
+    }
+    diff = git.FilterLockFiles(diff, lockFiles)
+    if strings.TrimSpace(diff) == "" {
+        fmt.Println("No changes to commit (after filtering lock files). Did you stage your changes?")
+        return nil
+    }
 	chunks, err := git.ParseDiffToChunks(diff)
 	if err != nil {
 		return fmt.Errorf("parseDiffToChunks error: %w", err)

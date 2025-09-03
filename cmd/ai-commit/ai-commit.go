@@ -17,12 +17,14 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/config"
 	"github.com/renatogalera/ai-commit/pkg/git"
 	"github.com/renatogalera/ai-commit/pkg/prompt"
-	"github.com/renatogalera/ai-commit/pkg/provider/anthropic"
-	"github.com/renatogalera/ai-commit/pkg/provider/deepseek"
-	"github.com/renatogalera/ai-commit/pkg/provider/google"
-	"github.com/renatogalera/ai-commit/pkg/provider/ollama"
-	"github.com/renatogalera/ai-commit/pkg/provider/openai"
-	"github.com/renatogalera/ai-commit/pkg/provider/phind"
+    _ "github.com/renatogalera/ai-commit/pkg/provider/anthropic"
+    _ "github.com/renatogalera/ai-commit/pkg/provider/deepseek"
+    _ "github.com/renatogalera/ai-commit/pkg/provider/google"
+    _ "github.com/renatogalera/ai-commit/pkg/provider/ollama"
+    _ "github.com/renatogalera/ai-commit/pkg/provider/openai"
+    _ "github.com/renatogalera/ai-commit/pkg/provider/openrouter"
+    _ "github.com/renatogalera/ai-commit/pkg/provider/phind"
+	"github.com/renatogalera/ai-commit/pkg/provider/registry"
 	"github.com/renatogalera/ai-commit/pkg/summarizer"
 	"github.com/renatogalera/ai-commit/pkg/template"
 	"github.com/renatogalera/ai-commit/pkg/ui"
@@ -37,20 +39,11 @@ var (
 )
 
 var (
-	apiKeyFlag           string
-	googleAPIKeyFlag     string
-	anthropicAPIKeyFlag  string
-	deepseekAPIKeyFlag   string
-	phindAPIKeyFlag      string
-	openaiBaseURLFlag    string
-	googleBaseURLFlag    string
-	anthropicBaseURLFlag string
-	deepseekBaseURLFlag  string
-	phindBaseURLFlag     string
-	ollamaBaseURLFlag    string
-	commitTypeFlag       string
-	templateFlag         string
-	languageFlag         string
+    apiKeyFlag           string
+    baseURLFlag          string
+    commitTypeFlag       string
+    templateFlag         string
+    languageFlag         string
 	forceFlag            bool
 	semanticReleaseFlag  bool
 	interactiveSplitFlag bool
@@ -68,7 +61,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.Run = runAICommit
+    rootCmd.Run = runAICommit
 }
 
 var reviewCmd = &cobra.Command{
@@ -79,29 +72,19 @@ var reviewCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&languageFlag, "language", "english", "Language for commit message/review")
-
-	rootCmd.Flags().StringVar(&apiKeyFlag, "apiKey", "", "API key for OpenAI provider (or env OPENAI_API_KEY)")
-	rootCmd.Flags().StringVar(&googleAPIKeyFlag, "googleApiKey", "", "API key for Google provider (or env GOOGLE_API_KEY)")
-	rootCmd.Flags().StringVar(&anthropicAPIKeyFlag, "anthropicApiKey", "", "API key for Anthropic provider (or env ANTHROPIC_API_KEY)")
-	rootCmd.Flags().StringVar(&deepseekAPIKeyFlag, "deepseekApiKey", "", "API key for Deepseek provider (or env DEEPSEEK_API_KEY)")
-	rootCmd.Flags().StringVar(&phindAPIKeyFlag, "phindApiKey", "", "API key for Phind provider (or env PHIND_API_KEY)")
-	rootCmd.Flags().StringVar(&openaiBaseURLFlag, "openaiBaseURL", "", "Base URL for OpenAI provider")
-	rootCmd.Flags().StringVar(&googleBaseURLFlag, "googleBaseURL", "", "Base URL for Google provider")
-	rootCmd.Flags().StringVar(&anthropicBaseURLFlag, "anthropicBaseURL", "", "Base URL for Anthropic provider")
-	rootCmd.Flags().StringVar(&deepseekBaseURLFlag, "deepseekBaseURL", "", "Base URL for Deepseek provider")
-	rootCmd.Flags().StringVar(&phindBaseURLFlag, "phindBaseURL", "", "Base URL for Phind provider")
-	rootCmd.Flags().StringVar(&ollamaBaseURLFlag, "ollamaBaseURL", "", "Base URL for Ollama provider")
-	rootCmd.Flags().StringVar(&commitTypeFlag, "commit-type", "", "Commit type (e.g., feat, fix)")
-	rootCmd.Flags().StringVar(&templateFlag, "template", "", "Commit message template")
-	rootCmd.Flags().BoolVar(&forceFlag, "force", false, "Bypass interactive UI and commit directly")
-	rootCmd.Flags().BoolVar(&semanticReleaseFlag, "semantic-release", false, "Perform semantic release")
-	rootCmd.Flags().BoolVar(&interactiveSplitFlag, "interactive-split", false, "Launch interactive commit splitting")
-	rootCmd.Flags().BoolVar(&emojiFlag, "emoji", false, "Include emoji in commit message")
-	rootCmd.Flags().BoolVar(&manualSemverFlag, "manual-semver", false, "Manually select semantic version bump")
-	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, google, anthropic, deepseek, phind")
-	rootCmd.Flags().StringVar(&modelFlag, "model", "", "Sub-model for the chosen provider")
-	rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
+    rootCmd.PersistentFlags().StringVar(&languageFlag, "language", "english", "Language for commit message/review")
+    rootCmd.Flags().StringVar(&apiKeyFlag, "apiKey", "", "API key for the selected provider (or env ${PROVIDER}_API_KEY)")
+    rootCmd.Flags().StringVar(&baseURLFlag, "baseURL", "", "Base URL for the selected provider (or env ${PROVIDER}_BASE_URL)")
+    rootCmd.Flags().StringVar(&commitTypeFlag, "commit-type", "", "Commit type (e.g., feat, fix)")
+    rootCmd.Flags().StringVar(&templateFlag, "template", "", "Commit message template")
+    rootCmd.Flags().BoolVar(&forceFlag, "force", false, "Bypass interactive UI and commit directly")
+    rootCmd.Flags().BoolVar(&semanticReleaseFlag, "semantic-release", false, "Perform semantic release")
+    rootCmd.Flags().BoolVar(&interactiveSplitFlag, "interactive-split", false, "Launch interactive commit splitting")
+    rootCmd.Flags().BoolVar(&emojiFlag, "emoji", false, "Include emoji in commit message")
+    rootCmd.Flags().BoolVar(&manualSemverFlag, "manual-semver", false, "Manually select semantic version bump")
+    rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, google, anthropic, deepseek, phind, ollama, openrouter")
+    rootCmd.Flags().StringVar(&modelFlag, "model", "", "Sub-model for the chosen provider")
+    rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
 
 	rootCmd.AddCommand(newSummarizeCmd(setupAIEnvironment))
 	rootCmd.AddCommand(reviewCmd)
@@ -140,9 +123,9 @@ func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, 
 	if mergedCfg.Provider == "" {
 		mergedCfg.Provider = config.DefaultProvider
 	}
-	if !isValidProvider(mergedCfg.Provider) {
-		return nil, nil, nil, nil, fmt.Errorf("invalid provider: %s", mergedCfg.Provider)
-	}
+    if !registry.Has(mergedCfg.Provider) {
+        return nil, nil, nil, nil, fmt.Errorf("invalid provider: %s", mergedCfg.Provider)
+    }
 	if err := mergedCfg.Validate(); err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("config validation failed: %w", err)
 	}
@@ -167,15 +150,7 @@ func setupAIEnvironment() (context.Context, context.CancelFunc, *config.Config, 
 	return ctx, cancel, mergedCfg, aiClient, nil
 }
 
-func isValidProvider(provider string) bool {
-	validProviders := []string{"openai", "google", "anthropic", "deepseek", "phind", "ollama"}
-	for _, p := range validProviders {
-		if p == provider {
-			return true
-		}
-	}
-	return false
-}
+func isValidProvider(provider string) bool { return registry.Has(provider) }
 
 func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) {
 	provider := cfg.Provider
@@ -183,133 +158,59 @@ func initAIClient(ctx context.Context, cfg *config.Config) (ai.AIClient, error) 
 		provider = providerFlag
 	}
 
-	if !isValidProvider(provider) {
-		return nil, fmt.Errorf("provider inválido: %s", provider)
-	}
-
-	switch provider {
-	case "openai":
-		key, err := config.ResolveAPIKey(apiKeyFlag, "OPENAI_API_KEY", cfg.OpenAIAPIKey, "openai")
-		if err != nil {
-			return nil, err
-		}
-		model := cfg.OpenAIModel
-		if modelFlag != "" {
-			model = modelFlag
-		}
-		baseURL := cfg.OpenAIBaseURL
-		if openaiBaseURLFlag != "" {
-			baseURL = openaiBaseURLFlag
-		}
-		if baseURL == "" {
-			baseURL = config.DefaultOpenAIBaseURL
-		}
-		return openai.NewOpenAIClient(key, model, baseURL), nil
-
-	case "google":
-		key, err := config.ResolveAPIKey(googleAPIKeyFlag, "GOOGLE_API_KEY", cfg.GoogleAPIKey, "google")
-		if err != nil {
-			return nil, err
-		}
-		model := cfg.GoogleModel
-		if modelFlag != "" {
-			model = modelFlag
-		}
-		baseURL := cfg.GoogleBaseURL
-		if googleBaseURLFlag != "" {
-			baseURL = googleBaseURLFlag
-		}
-		if baseURL == "" {
-			baseURL = config.DefaultGoogleBaseURL
-		}
-		googleClient, err := google.NewGoogleProClient(ctx, key, model, baseURL)
-		if err != nil {
-			return nil, fmt.Errorf("falha ao inicializar o cliente Google: %w", err)
-		}
-		return google.NewClient(googleClient), nil
-
-	case "anthropic":
-		key, err := config.ResolveAPIKey(anthropicAPIKeyFlag, "ANTHROPIC_API_KEY", cfg.AnthropicAPIKey, "anthropic")
-		if err != nil {
-			return nil, err
-		}
-		model := cfg.AnthropicModel
-		if modelFlag != "" {
-			model = modelFlag
-		}
-		baseURL := cfg.AnthropicBaseURL
-		if anthropicBaseURLFlag != "" {
-			baseURL = anthropicBaseURLFlag
-		}
-		if baseURL == "" {
-			baseURL = config.DefaultAnthropicBaseURL
-		}
-		anthroClient, err := anthropic.NewAnthropicClient(key, model, baseURL)
-		if err != nil {
-			return nil, fmt.Errorf("falha ao inicializar o cliente Anthropic: %w", err)
-		}
-		return anthroClient, nil
-
-	case "deepseek":
-		key, err := config.ResolveAPIKey(deepseekAPIKeyFlag, "DEEPSEEK_API_KEY", cfg.DeepseekAPIKey, "deepseek")
-		if err != nil {
-			return nil, err
-		}
-		model := cfg.DeepseekModel
-		if modelFlag != "" {
-			model = modelFlag
-		}
-		baseURL := cfg.DeepseekBaseURL
-		if deepseekBaseURLFlag != "" {
-			baseURL = deepseekBaseURLFlag
-		}
-		if baseURL == "" {
-			baseURL = config.DefaultDeepseekBaseURL
-		}
-		deepseekClient, err := deepseek.NewDeepseekClient(key, model, baseURL)
-		if err != nil {
-			return nil, fmt.Errorf("falha ao inicializar o cliente Deepseek: %w", err)
-		}
-		return deepseekClient, nil
-
-	case "phind":
-		key, err := config.ResolveAPIKey(phindAPIKeyFlag, "PHIND_API_KEY", cfg.PhindAPIKey, "phind")
-		if err != nil && strings.TrimSpace(key) == "" {
-			key = ""
-		}
-		model := cfg.PhindModel
-		if modelFlag != "" {
-			model = modelFlag
-		}
-		baseURL := cfg.PhindBaseURL
-		if phindBaseURLFlag != "" {
-			baseURL = phindBaseURLFlag
-		}
-		if baseURL == "" {
-			baseURL = config.DefaultPhindBaseURL
-		}
-		return phind.NewPhindClient(key, model, baseURL), nil
-
-	case "ollama":
-		baseURL := cfg.OllamaBaseURL
-		if ollamaBaseURLFlag != "" {
-			baseURL = ollamaBaseURLFlag
-		}
-		if baseURL == "" {
-			baseURL = config.DefaultOllamaBaseURL
-		}
-		model := cfg.OllamaModel
-		if modelFlag != "" {
-			model = modelFlag
-		}
-		if model == "" {
-			model = config.DefaultOllamaModel
-		}
-		return ollama.NewOllamaClient(baseURL, model), nil
-
-	default:
+	if !registry.Has(provider) {
 		return nil, fmt.Errorf("provider não suportado: %s", provider)
 	}
+
+    // Base settings from config
+    ps := cfg.GetProviderSettings(provider)
+    if def, ok := registry.GetDefaults(provider); ok {
+        if ps.Model == "" { ps.Model = def.Model }
+        if ps.BaseURL == "" { ps.BaseURL = def.BaseURL }
+    }
+
+	// Apply generic overrides
+	if modelFlag != "" {
+		ps.Model = modelFlag
+	}
+    if override := baseURLOverrideFor(provider); override != "" {
+        ps.BaseURL = override
+    }
+if key, err := apiKeyFor(provider, ps.APIKey); err == nil {
+    ps.APIKey = key
+} else if requiresAPIKey(provider) {
+    return nil, err
+} else {
+    // providers without mandatory keys (phind, ollama)
+    ps.APIKey = ""
+}
+
+    factory, _ := registry.Get(provider)
+    return factory(ctx, provider, ps)
+}
+
+func baseURLOverrideFor(provider string) string {
+    if strings.TrimSpace(baseURLFlag) != "" {
+        return baseURLFlag
+    }
+    env := strings.ToUpper(provider) + "_BASE_URL"
+    if v := strings.TrimSpace(os.Getenv(env)); v != "" {
+        return v
+    }
+    return ""
+}
+
+func apiKeyFor(provider, configVal string) (string, error) {
+    // Priority: flag > env > config value
+    env := strings.ToUpper(provider) + "_API_KEY"
+    return config.ResolveAPIKey(apiKeyFlag, env, configVal, provider)
+}
+
+func requiresAPIKey(provider string) bool { return registry.RequiresAPIKey(provider) }
+
+func supportsStreaming(client ai.AIClient) bool {
+    _, ok := client.(ai.StreamingAIClient)
+    return ok
 }
 
 func formatReviewOutput(title, content string) string {
@@ -343,33 +244,54 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	diff, err := git.GetGitDiffIgnoringMoves(ctx)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get Git diff (ignoring moves)")
-		return
-	}
-	diff = git.FilterLockFiles(diff, cfg.LockFiles)
+    diff, err := git.GetGitDiffIgnoringMoves(ctx)
+    if err != nil {
+        log.Fatal().Err(err).Msg("Failed to get Git diff (ignoring moves)")
+        return
+    }
+    diff = git.FilterLockFiles(diff, cfg.LockFiles)
+    if cfg.Limits.Diff.Enabled && cfg.Limits.Diff.MaxChars > 0 {
+        if summarized, did := aiClient.MaybeSummarizeDiff(diff, cfg.Limits.Diff.MaxChars); did {
+            diff = summarized
+        }
+    }
 	if strings.TrimSpace(diff) == "" {
 		fmt.Println("No staged changes after filtering lock files.")
 		return
 	}
 
-	promptText := prompt.BuildCommitPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate)
-	commitMsg, genErr := generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, cfg.EnableEmoji)
-	if genErr != nil {
-		log.Error().Err(genErr).Msg("Commit message generation error")
-		os.Exit(1)
-	}
+    promptText := prompt.BuildCommitPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate)
+    if cfg.Limits.Prompt.Enabled && cfg.Limits.Prompt.MaxChars > 0 {
+        if len(promptText) > cfg.Limits.Prompt.MaxChars {
+            // hard truncate with marker
+            limit := cfg.Limits.Prompt.MaxChars
+            if limit > 3 {
+                limit -= 3
+            }
+            promptText = promptText[:limit] + "..."
+        }
+    }
+    var commitMsg string
+    if forceFlag || !supportsStreaming(aiClient) {
+        var genErr error
+        commitMsg, genErr = generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, cfg.EnableEmoji)
+        if genErr != nil {
+            log.Error().Err(genErr).Msg("Commit message generation error")
+            os.Exit(1)
+        }
+    } else {
+        commitMsg = ""
+    }
 
 	var styleReviewSuggestions string
-	if reviewMessageFlag {
-		suggestions, errReview := enforceCommitMessageStyle(ctx, aiClient, commitMsg, languageFlag, cfg.PromptTemplate)
-		if errReview != nil {
-			log.Error().Err(errReview).Msg("Commit message style enforcement failed")
-			os.Exit(1)
-		}
-		styleReviewSuggestions = suggestions
-	}
+    if reviewMessageFlag && commitMsg != "" {
+        suggestions, errReview := enforceCommitMessageStyle(ctx, aiClient, commitMsg, languageFlag, cfg.PromptTemplate)
+        if errReview != nil {
+            log.Error().Err(errReview).Msg("Commit message style enforcement failed")
+            os.Exit(1)
+        }
+        styleReviewSuggestions = suggestions
+    }
 
 	if forceFlag {
 		if reviewMessageFlag && strings.TrimSpace(styleReviewSuggestions) != "" &&
@@ -413,7 +335,22 @@ func runAICodeReview(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	reviewPrompt := prompt.BuildCodeReviewPrompt(diff, languageFlag, cfg.PromptTemplate)
+    // Optionally summarize/truncate diff for code review as well.
+    if cfg.Limits.Diff.Enabled && cfg.Limits.Diff.MaxChars > 0 {
+        if summarized, did := aiClient.MaybeSummarizeDiff(diff, cfg.Limits.Diff.MaxChars); did {
+            diff = summarized
+        }
+    }
+    reviewPrompt := prompt.BuildCodeReviewPrompt(diff, languageFlag, cfg.PromptTemplate)
+    if cfg.Limits.Prompt.Enabled && cfg.Limits.Prompt.MaxChars > 0 {
+        if len(reviewPrompt) > cfg.Limits.Prompt.MaxChars {
+            limit := cfg.Limits.Prompt.MaxChars
+            if limit > 3 {
+                limit -= 3
+            }
+            reviewPrompt = reviewPrompt[:limit] + "..."
+        }
+    }
 	reviewResult, err := aiClient.GetCommitMessage(ctx, reviewPrompt)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Code review generation error")
@@ -450,25 +387,34 @@ func runSummarizeCommand(setupAIEnvironment func() (context.Context, context.Can
 }
 
 func runInteractiveUI(
-	ctx context.Context,
-	commitMsg string,
-	diff string,
-	promptText string,
-	styleReviewSuggestions string,
-	enableEmoji bool,
-	aiClient ai.AIClient,
+    ctx context.Context,
+    commitMsg string,
+    diff string,
+    promptText string,
+    styleReviewSuggestions string,
+    enableEmoji bool,
+    aiClient ai.AIClient,
 ) {
-	uiModel := ui.NewUIModel(
-		commitMsg,
-		diff,
-		languageFlag,
-		promptText,
-		commitTypeFlag,
-		templateFlag,
-		styleReviewSuggestions,
-		enableEmoji,
-		aiClient,
-	)
+    // Start with streaming if the client supports it and we have a prompt
+    startStreaming := false
+    if _, ok := aiClient.(ai.StreamingAIClient); ok && strings.TrimSpace(promptText) != "" {
+        startStreaming = true
+        // When streaming, start with empty commit message; the TUI will fill it in.
+        commitMsg = ""
+    }
+
+    uiModel := ui.NewUIModel(
+        commitMsg,
+        diff,
+        languageFlag,
+        promptText,
+        commitTypeFlag,
+        templateFlag,
+        styleReviewSuggestions,
+        enableEmoji,
+        aiClient,
+        startStreaming,
+    )
 	program := ui.NewProgram(uiModel)
 	if _, err := program.Run(); err != nil {
 		log.Fatal().Err(err).Msg("UI encountered an error")

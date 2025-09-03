@@ -2,6 +2,7 @@ package committypes
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/renatogalera/ai-commit/pkg/config"
@@ -14,12 +15,10 @@ type commitTypeInfo struct {
 
 var commitTypeList []commitTypeInfo
 
-// InitCommitTypes now accepts []config.CommitTypeConfig directly
+// InitCommitTypes resets the known commit type list.
 func InitCommitTypes(cfgTypes []config.CommitTypeConfig) {
-	commitTypeList = []commitTypeInfo{}
-
+	commitTypeList = commitTypeList[:0]
 	for _, t := range cfgTypes {
-		// Copy each config.CommitTypeConfig into our internal slice
 		commitTypeList = append(commitTypeList, commitTypeInfo{
 			Type:  strings.TrimSpace(t.Type),
 			Emoji: strings.TrimSpace(t.Emoji),
@@ -27,7 +26,7 @@ func InitCommitTypes(cfgTypes []config.CommitTypeConfig) {
 	}
 }
 
-// IsValidCommitType returns true if the given commit type is in our list.
+// IsValidCommitType returns true if t is in the configured list.
 func IsValidCommitType(t string) bool {
 	for _, info := range commitTypeList {
 		if info.Type == t {
@@ -37,7 +36,6 @@ func IsValidCommitType(t string) bool {
 	return false
 }
 
-// GetEmojiForType returns the emoji associated with the given commit type, if any.
 func GetEmojiForType(t string) string {
 	for _, info := range commitTypeList {
 		if info.Type == t {
@@ -47,48 +45,56 @@ func GetEmojiForType(t string) string {
 	return ""
 }
 
-// GuessCommitType attempts to guess a commit type by checking if the AI-generated
-// message contains any known type in commitTypeList.
+// GuessCommitType tries to pick the most likely type from the message's first line.
+// It uses word-boundary matching to avoid "fix" in "prefix" false-positives.
 func GuessCommitType(message string) string {
-	lower := strings.ToLower(message)
-	for _, info := range commitTypeList {
-		if info.Type == "" {
+	line := strings.ToLower(strings.TrimSpace(firstLine(message)))
+	types := GetAllTypes()
+
+	// Prefer longer types first (e.g., "refactor" before "feat")
+	sort.SliceStable(types, func(i, j int) bool { return len(types[i]) > len(types[j]) })
+
+	for _, t := range types {
+		if t == "" {
 			continue
 		}
-		if strings.Contains(lower, info.Type) {
-			return info.Type
+		pat := regexp.MustCompile(`\b` + regexp.QuoteMeta(strings.ToLower(t)) + `\b`)
+		if pat.FindStringIndex(line) != nil {
+			return t
 		}
 	}
 	return ""
 }
 
-// TypesRegexPattern returns a regex pattern that matches any configured commit type.
+// TypesRegexPattern builds a safe alternation for all configured types.
 func TypesRegexPattern() string {
 	if len(commitTypeList) == 0 {
-		// fallback if user has no commit types in config
 		return "feat|fix|docs|style|refactor|test|chore|perf|build|ci"
 	}
 	var t []string
 	for _, info := range commitTypeList {
 		if info.Type != "" {
-			t = append(t, info.Type)
+			t = append(t, regexp.QuoteMeta(info.Type))
 		}
 	}
 	return strings.Join(t, "|")
 }
 
-// BuildRegexPatternWithEmoji constructs a dynamic regex pattern using
-// the list of commit types. e.g.: ^((\p{So}|\p{Sk}|:\w+:)\s*)?(feat|fix|docs):
+// BuildRegexPatternWithEmoji matches optional emoji, a valid type, optional scope, and colon.
 func BuildRegexPatternWithEmoji() *regexp.Regexp {
-	pattern := `^((\p{So}|\p{Sk}|:\w+:)\s*)?(` + TypesRegexPattern() + `)(\([^)]+\))?:`
+	pattern := `^((\p{So}|\p{Sk}|:\w+:)\s*)?(` + TypesRegexPattern() + `)(\([^)]+\))?:\s*`
 	return regexp.MustCompile(pattern)
 }
 
-// OPTIONAL: Provide a helper to return all commit types as []string for TUI menus, etc.
 func GetAllTypes() []string {
 	var results []string
 	for _, info := range commitTypeList {
 		results = append(results, info.Type)
 	}
 	return results
+}
+
+func firstLine(msg string) string {
+	lines := strings.Split(msg, "\n")
+	return strings.TrimSpace(lines[0])
 }

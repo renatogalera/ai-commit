@@ -10,10 +10,18 @@ import (
 
 // AIClient defines the interface for AI providers.
 type AIClient interface {
-	GetCommitMessage(ctx context.Context, prompt string) (string, error)
-	SanitizeResponse(message, commitType string) string
-	ProviderName() string
-	MaybeSummarizeDiff(diff string, maxLength int) (string, bool)
+    GetCommitMessage(ctx context.Context, prompt string) (string, error)
+    SanitizeResponse(message, commitType string) string
+    ProviderName() string
+    MaybeSummarizeDiff(diff string, maxLength int) (string, bool)
+}
+
+// StreamingAIClient is an optional interface that providers can implement
+// to stream text deltas while generating the message. Implementations should
+// call onDelta with incremental text (may be per-token or per-chunk) and
+// return the final full text when the stream finishes.
+type StreamingAIClient interface {
+    StreamCommitMessage(ctx context.Context, prompt string, onDelta func(delta string)) (final string, err error)
 }
 
 type BaseAIClient struct {

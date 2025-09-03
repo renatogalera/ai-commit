@@ -13,19 +13,25 @@ import (
 )
 
 type OllamaClient struct {
-	ai.BaseAIClient
-	client *api.Client
-	model  string
+    ai.BaseAIClient
+    client *api.Client
+    model  string
 }
 
-func NewOllamaClient(baseURL, model string) *OllamaClient {
-	u, _ := url.Parse(baseURL)
-	client := api.NewClient(u, http.DefaultClient)
-	return &OllamaClient{
-		BaseAIClient: ai.BaseAIClient{Provider: "ollama"},
-		client:       client,
-		model:        model,
-	}
+func NewOllamaClient(provider, baseURL, model string) (*OllamaClient, error) {
+    u, err := url.Parse(strings.TrimSpace(baseURL))
+    if err != nil || u.Scheme == "" || u.Host == "" {
+        return nil, fmt.Errorf("invalid Ollama baseURL: %q", baseURL)
+    }
+    if strings.TrimSpace(model) == "" {
+        return nil, fmt.Errorf("ollama model is required")
+    }
+    client := api.NewClient(u, http.DefaultClient)
+    return &OllamaClient{
+        BaseAIClient: ai.BaseAIClient{Provider: provider},
+        client:       client,
+        model:        model,
+    }, nil
 }
 
 func (oc *OllamaClient) GetCommitMessage(ctx context.Context, prompt string) (string, error) {
@@ -35,20 +41,17 @@ func (oc *OllamaClient) GetCommitMessage(ctx context.Context, prompt string) (st
 		Prompt: prompt,
 		Stream: &stream,
 	}
-
 	var response string
 	err := oc.client.Generate(ctx, req, func(resp api.GenerateResponse) error {
 		response = resp.Response
 		return nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to generate response from Ollama: %w", err)
+		return "", fmt.Errorf("ollama generate failed: %w", err)
 	}
-
-	if response == "" {
+	if strings.TrimSpace(response) == "" {
 		return "", errors.New("empty response from Ollama")
 	}
-
 	return strings.TrimSpace(response), nil
 }
 
@@ -60,4 +63,11 @@ func (oc *OllamaClient) MaybeSummarizeDiff(diff string, maxLength int) (string, 
 	return oc.BaseAIClient.MaybeSummarizeDiff(diff, maxLength)
 }
 
-var _ ai.AIClient = (*OllamaClient)(nil) 
+func pick(s, dft string) string {
+	if strings.TrimSpace(s) != "" {
+		return s
+	}
+	return dft
+}
+
+var _ ai.AIClient = (*OllamaClient)(nil)

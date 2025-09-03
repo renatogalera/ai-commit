@@ -1,70 +1,20 @@
 package deepseek
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"strings"
+    "fmt"
+    "strings"
 
-	"github.com/renatogalera/ai-commit/pkg/ai"
-	gogpt "github.com/sashabaranov/go-openai"
+    openaic "github.com/renatogalera/ai-commit/pkg/provider/openai_compat"
 )
 
-type DeepseekClient struct {
-	ai.BaseAIClient
-	client *gogpt.Client
-	model  string
+// NewDeepseekClient returns a client using the OpenAI-compatible SDK against DeepSeek's endpoint.
+// BaseURL e model devem ser providos pelo registro/config; não definimos fallback aqui.
+func NewDeepseekClient(provider, apiKey, model, baseURL string) (*openaic.Client, error) {
+    if strings.TrimSpace(baseURL) == "" {
+        return nil, fmt.Errorf("deepseek baseURL is required")
+    }
+    if strings.TrimSpace(model) == "" {
+        return nil, fmt.Errorf("deepseek model is required")
+    }
+    return openaic.NewCompatClient(provider, apiKey, model, baseURL), nil
 }
-
-func NewDeepseekClient(apiKey, model, baseURL string) (*DeepseekClient, error) {
-	if apiKey == "" {
-		return nil, errors.New("deepseek API key is required")
-	}
-	if model == "" {
-		return nil, errors.New("deepseek model is required")
-	}
-
-	cfg := gogpt.DefaultConfig(apiKey)
-	if strings.TrimSpace(baseURL) != "" {
-		cfg.BaseURL = baseURL
-	} else {
-		cfg.BaseURL = "https://api.deepseek.com/v1"
-	}
-	client := gogpt.NewClientWithConfig(cfg)
-
-	return &DeepseekClient{
-		BaseAIClient: ai.BaseAIClient{Provider: "deepseek"},
-		client:       client,
-		model:        model,
-	}, nil
-}
-
-func (d *DeepseekClient) GetCommitMessage(ctx context.Context, prompt string) (string, error) {
-	req := gogpt.ChatCompletionRequest{
-		Model: d.model,
-		Messages: []gogpt.ChatCompletionMessage{
-			{
-				Role:    gogpt.ChatMessageRoleUser,
-				Content: prompt,
-			},
-		},
-	}
-	resp, err := d.client.CreateChatCompletion(ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("failed to get chat completion from Deepseek: %w", err)
-	}
-	if len(resp.Choices) == 0 {
-		return "", errors.New("no response from Deepseek")
-	}
-	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
-}
-
-func (d *DeepseekClient) SanitizeResponse(message, commitType string) string {
-	return d.BaseAIClient.SanitizeResponse(message, commitType)
-}
-
-func (d *DeepseekClient) MaybeSummarizeDiff(diff string, maxLength int) (string, bool) {
-	return d.BaseAIClient.MaybeSummarizeDiff(diff, maxLength)
-}
-
-var _ ai.AIClient = (*DeepseekClient)(nil)

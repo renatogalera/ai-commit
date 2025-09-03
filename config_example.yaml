@@ -4,40 +4,46 @@
 authorName: "Your Name"
 authorEmail: "youremail@example.com"
 
-# Which AI provider to use. Valid options: "openai", "google" or "anthropic"
-provider: "phind" # Current Phind model is free
+# Which AI provider to use. Valid options: "openai", "google", "anthropic", "deepseek", "phind", "ollama", "openrouter"
+provider: "phind"
 
-# Phind model and base URL.
-phindModel: "Phind-70B"
-phindBaseURL: "https://https.extension.phind.com/agent/"
+# provider config (preferred). Override with CLI flags or env vars.
+providers:
+  openai:
+    apiKey: ""
+    model: "gpt-5-nano"
+    baseURL: "https://api.openai.com/v1"
+  google:
+    apiKey: ""
+    model: "models/gemini-2.5-flash"
+    baseURL: "https://generativelanguage.googleapis.com"
+  anthropic:
+    apiKey: ""
+    model: "claude-sonnet-4-20250514"
+    baseURL: "https://api.anthropic.com/v1"
+  deepseek:
+    apiKey: ""
+    model: "deepseek-chat"
+    baseURL: "https://api.deepseek.com/v1"
+  openrouter:
+    apiKey: ""
+    model: "openrouter/auto"
+    baseURL: "https://openrouter.ai/api/v1"
+  phind:
+    apiKey: "" # Phind does not require an API key by default
+    model: "Phind-70B"
+    baseURL: "https://https.extension.phind.com/agent/"
+  ollama:
+    model: "llama2"
+    baseURL: "http://localhost:11434"
 
-# OpenAI model to use.
-openaiModel: "gpt-4olatest"
-openaiBaseURL: "https://api.openai.com/v1"
-
-# Google model to use.
-googleModel: "models/gemini-2.5-flash"
-googleBaseURL: "https://generativelanguage.googleapis.com"
-
-# Anthropic model to use.
-anthropicModel: "claude-3-5-sonnet-latest"
-anthropicBaseURL: "https://api.anthropic.com/v1"
-
-# Deepseek model and base URL.
-deepseekModel: "deepseek-chat"
-deepseekBaseURL: "https://api.deepseek.com/v1"
-
-# API key for Phind. Overridden by the --phindApiKey flag or the PHIND_API_KEY environment variable.
-phindApiKey: "" # Phind does not require an API key by default
-
-# API key for OpenAI. Overridden by the --apiKey flag or the OPENAI_API_KEY environment variable.
-openAiApiKey: "sk-your-openai-key"
-
-# API key for Google. Overridden by the --googleApiKey flag or the GOOGLE_API_KEY environment variable.
-googleApiKey: ""
-
-# API key for Anthropic. Overridden by the --anthropicApiKey flag or the ANTHROPIC_API_KEY environment variable.
-anthropicApiKey: ""
+limits:
+  diff:
+    enabled: false
+    maxChars: 0
+  prompt:
+    enabled: false
+    maxChars: 0
 
 # Default commit type (e.g. feat, fix, docs, etc.). Overridden by --commit-type flag.
 commitType: ""
@@ -46,7 +52,7 @@ commitType: ""
 template: ""
 
 # A default prompt seed. Typically built automatically from the staged diff, but you can add extra text here.
-promptTemplate: "" # Customize the AI prompt template here
+promptTemplate: ""
 
 commitTypes:
 - type: "feat"
@@ -69,6 +75,7 @@ commitTypes:
   emoji: "📦"
 - type: "ci"
   emoji: "👷"
+
 lockFiles:
 # Specify lock files to filter from diff
 - "go.mod"

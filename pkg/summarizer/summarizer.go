@@ -51,18 +51,31 @@ func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Con
 
 	// Get the selected commit and its diff.
 	selectedCommit := commits[idx]
-	diffStr, err := getCommitDiff(repo, selectedCommit)
-	if err != nil {
-		return fmt.Errorf("failed to get commit diff: %w", err)
-	}
-	if strings.TrimSpace(diffStr) == "" {
-		fmt.Println("No diff found for this commit (maybe an empty or merge commit).")
-		return nil
-	}
+    diffStr, err := getCommitDiff(repo, selectedCommit)
+    if err != nil {
+        return fmt.Errorf("failed to get commit diff: %w", err)
+    }
+    if strings.TrimSpace(diffStr) == "" {
+        fmt.Println("No diff found for this commit (maybe an empty or merge commit).")
+        return nil
+    }
+
+    if cfg.Limits.Diff.Enabled && cfg.Limits.Diff.MaxChars > 0 {
+        if summarized, did := aiClient.MaybeSummarizeDiff(diffStr, cfg.Limits.Diff.MaxChars); did {
+            diffStr = summarized
+        }
+    }
 
 	// Build the prompt for the AI using the commit diff and language.
 	commitSummaryPrompt := prompt.BuildCommitSummaryPrompt(selectedCommit, diffStr, cfg.PromptTemplate, language)
-	summary, err := aiClient.GetCommitMessage(ctx, commitSummaryPrompt)
+    if cfg.Limits.Prompt.Enabled && cfg.Limits.Prompt.MaxChars > 0 {
+        if len(commitSummaryPrompt) > cfg.Limits.Prompt.MaxChars {
+            limit := cfg.Limits.Prompt.MaxChars
+            if limit > 3 { limit -= 3 }
+            commitSummaryPrompt = commitSummaryPrompt[:limit] + "..."
+        }
+    }
+    summary, err := aiClient.GetCommitMessage(ctx, commitSummaryPrompt)
 	if err != nil {
 		return fmt.Errorf("failed to summarize commit with AI: %w", err)
 	}
