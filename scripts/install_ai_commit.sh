@@ -176,8 +176,8 @@ chmod +x "$BINARY_PATH" || error_exit "Failed to set execute permission on the b
 ###########################################
 echo "Installing to ${DESTINATION}..."
 
-# On Linux/macOS, use sudo if not run as root.
-if [ "$os" != "windows" ] && [ "$EUID" -ne 0 ]; then
+# On Linux/macOS, use sudo if destination isn't writable by the user.
+if [ "$os" != "windows" ] && [ "$EUID" -ne 0 ] && [ ! -w "$DEST_DIR" ] ; then
     sudo mv "$BINARY_PATH" "$DESTINATION" || { rm -f "$BINARY_PATH"; error_exit "Failed to move file to ${DESTINATION}."; }
 else
     mv "$BINARY_PATH" "$DESTINATION" || { rm -f "$BINARY_PATH"; error_exit "Failed to move file to ${DESTINATION}."; }
