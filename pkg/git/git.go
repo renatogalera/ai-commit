@@ -25,9 +25,17 @@ type lineDiff struct {
 	Text string
 }
 
-// IsGitRepository returns true if "." is a Git repo.
+// openRepo opens the git repository from the current directory,
+// walking up parent directories to find the .git folder if needed.
+func openRepo() (*gogit.Repository, error) {
+	return gogit.PlainOpenWithOptions(".", &gogit.PlainOpenOptions{
+		DetectDotGit: true,
+	})
+}
+
+// IsGitRepository returns true if "." (or an ancestor) is a Git repo.
 func IsGitRepository(ctx context.Context) bool {
-	_, err := gogit.PlainOpen(".")
+	_, err := openRepo()
 	return err == nil
 }
 
@@ -39,7 +47,7 @@ func IsGitRepository(ctx context.Context) bool {
 // if the user stages partial changes and then edits further. To make it *exactly* reflect the
 // index, you’d need to read blobs from the index (or shell-out to `git show :path`).
 func GetGitDiffIgnoringMoves(ctx context.Context) (string, error) {
-	repo, err := gogit.PlainOpen(".")
+	repo, err := openRepo()
 	if err != nil {
 		return "", fmt.Errorf("failed to open repository: %w", err)
 	}
@@ -302,7 +310,7 @@ func FilterLockFiles(diff string, lockFiles []string) string {
 
 // CommitChanges creates a commit with a supplied message and the configured author identity.
 func CommitChanges(ctx context.Context, commitMessage string) error {
-	repo, err := gogit.PlainOpen(".")
+	repo, err := openRepo()
 	if err != nil {
 		return fmt.Errorf("failed to open repository: %w", err)
 	}
@@ -325,7 +333,7 @@ func CommitChanges(ctx context.Context, commitMessage string) error {
 
 // GetHeadCommitMessage returns the HEAD commit message.
 func GetHeadCommitMessage(ctx context.Context) (string, error) {
-	repo, err := gogit.PlainOpen(".")
+	repo, err := openRepo()
 	if err != nil {
 		return "", fmt.Errorf("failed to open repository: %w", err)
 	}
@@ -342,7 +350,7 @@ func GetHeadCommitMessage(ctx context.Context) (string, error) {
 
 // GetCurrentBranch returns the short name of the current branch.
 func GetCurrentBranch(ctx context.Context) (string, error) {
-	repo, err := gogit.PlainOpen(".")
+	repo, err := openRepo()
 	if err != nil {
 		return "", fmt.Errorf("failed to open repository: %w", err)
 	}

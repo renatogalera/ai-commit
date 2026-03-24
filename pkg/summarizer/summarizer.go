@@ -20,7 +20,7 @@ import (
 // Now receives an extra parameter "language" for the summary prompt.
 func SummarizeCommits(ctx context.Context, aiClient ai.AIClient, cfg *config.Config, language string) error {
 	// Open the current git repository.
-	repo, err := gogit.PlainOpen(".")
+	repo, err := gogit.PlainOpenWithOptions(".", &gogit.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		return fmt.Errorf("failed to open git repository: %w", err)
 	}

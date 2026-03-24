@@ -18,7 +18,7 @@ import (
 
 // GetCurrentVersionTag retrieves the latest semantic version tag.
 func GetCurrentVersionTag(ctx context.Context) (string, error) {
-	repo, err := git.PlainOpen(".")
+	repo, err := git.PlainOpenWithOptions(".", &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		return "", fmt.Errorf("failed to open repository: %w", err)
 	}
@@ -64,7 +64,7 @@ func CreateLocalTag(ctx context.Context, newVersionTag string) error {
 	if newVersionTag == "" {
 		return errors.New("version tag is empty")
 	}
-	repo, err := git.PlainOpen(".")
+	repo, err := git.PlainOpenWithOptions(".", &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		return fmt.Errorf("failed to open repository: %w", err)
 	}
