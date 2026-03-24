@@ -3,54 +3,49 @@ package google
 import (
 	"context"
 	"fmt"
-	"strings"
 
-	"github.com/google/generative-ai-go/genai"
-	"google.golang.org/api/option"
+	"google.golang.org/genai"
 
 	"github.com/renatogalera/ai-commit/pkg/ai"
 )
 
 type GoogleClient struct {
-    ai.BaseAIClient
-    client *genai.GenerativeModel
+	ai.BaseAIClient
+	client *genai.Client
+	model  string
 }
 
-func NewClient(provider string, client *genai.GenerativeModel) *GoogleClient {
-    return &GoogleClient{
-        BaseAIClient: ai.BaseAIClient{Provider: provider},
-        client:       client,
-    }
-}
-
-func NewGoogleProClient(ctx context.Context, apiKey string, modelName string, baseURL string) (*genai.GenerativeModel, error) {
-	opts := []option.ClientOption{option.WithAPIKey(apiKey)}
-	if strings.TrimSpace(baseURL) != "" {
-		opts = append(opts, option.WithEndpoint(baseURL))
+func NewGoogleClient(ctx context.Context, provider, apiKey, model, baseURL string) (*GoogleClient, error) {
+	cfg := &genai.ClientConfig{
+		APIKey:  apiKey,
+		Backend: genai.BackendGeminiAPI,
 	}
-	client, err := genai.NewClient(ctx, opts...)
+	if baseURL != "" {
+		cfg.HTTPOptions.BaseURL = baseURL
+	}
+	client, err := genai.NewClient(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating google client: %w", err)
 	}
-	model := client.GenerativeModel(modelName)
-	return model, nil
+	return &GoogleClient{
+		BaseAIClient: ai.BaseAIClient{Provider: provider},
+		client:       client,
+		model:        model,
+	}, nil
 }
 
 func (gc *GoogleClient) GetCommitMessage(ctx context.Context, prompt string) (string, error) {
-	resp, err := gc.client.GenerateContent(ctx, genai.Text(prompt))
+	resp, err := gc.client.Models.GenerateContent(ctx, gc.model, genai.Text(prompt), nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate content: %w", err)
 	}
-	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+	text := resp.Text()
+	if text == "" {
 		return "", fmt.Errorf("no response from Google")
 	}
-	if text, ok := resp.Candidates[0].Content.Parts[0].(genai.Text); ok {
-		return string(text), nil
-	}
-	return "", fmt.Errorf("unexpected response format from Google")
+	return text, nil
 }
 
-// SanitizeResponse cleans Google specific responses if needed.  Overrides default.
 func (gc *GoogleClient) SanitizeResponse(message, commitType string) string {
 	return gc.BaseAIClient.SanitizeResponse(message, commitType)
 }
