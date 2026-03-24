@@ -174,6 +174,9 @@ type Model struct {
 	textarea textarea.Model
 	help     help.Model
 
+	// promptTemplate stores the configured prompt template so regeneration preserves it.
+	promptTemplate string
+
 	// styleReview holds optional suggestions from AI for commit style:
 	styleReview string
 	// last error message to display prominently
@@ -191,6 +194,7 @@ func NewUIModel(
 	enableEmoji bool,
 	client ai.AIClient,
 	startStreaming bool,
+	promptTemplate string,
 ) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -234,7 +238,8 @@ func NewUIModel(
 		textarea:      ta,
 		help:          help.New(),
 
-		styleReview:   styleReviewSuggestions,
+		promptTemplate: promptTemplate,
+		styleReview:    styleReviewSuggestions,
 		startStreaming: startStreaming,
 		errMsg:         "",
 		progValue:      0,
@@ -306,7 +311,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.spinner = spinner.New()
 					m.spinner.Spinner = spinner.Dot
 					m.regenCount++
-					m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, userPrompt, "")
+					m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, userPrompt, m.promptTemplate)
 					return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
 				}
 			case "esc":
@@ -390,7 +395,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinner.Spinner = spinner.Dot
 				m.regenCount++
 				// Rebuild the prompt with the newly selected commit type
-				m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, "", "")
+				m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, "", m.promptTemplate)
 				return m, tea.Batch(m.spinner.Tick,
 					regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji))
 			case "esc", "q":

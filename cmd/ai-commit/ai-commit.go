@@ -314,7 +314,7 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, cfg.EnableEmoji, aiClient)
+	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, cfg.EnableEmoji, aiClient, cfg.PromptTemplate)
 }
 
 func runAICodeReview(cmd *cobra.Command, args []string) {
@@ -394,6 +394,7 @@ func runInteractiveUI(
     styleReviewSuggestions string,
     enableEmoji bool,
     aiClient ai.AIClient,
+    promptTemplate string,
 ) {
     // Start with streaming if the client supports it and we have a prompt
     startStreaming := false
@@ -414,6 +415,7 @@ func runInteractiveUI(
         enableEmoji,
         aiClient,
         startStreaming,
+        promptTemplate,
     )
 	program := ui.NewProgram(uiModel)
 	if _, err := program.Run(); err != nil {
