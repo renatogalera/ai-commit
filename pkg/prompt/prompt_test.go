@@ -22,7 +22,7 @@ func init() {
 
 func TestBuildCommitPrompt_DefaultTemplate(t *testing.T) {
 	t.Parallel()
-	result := BuildCommitPrompt("diff content", "English", "", "", "")
+	result := BuildCommitPrompt("diff content", "English", "", "", "", "")
 
 	if !strings.Contains(result, "diff content") {
 		t.Error("expected prompt to contain diff")
@@ -38,7 +38,7 @@ func TestBuildCommitPrompt_DefaultTemplate(t *testing.T) {
 func TestBuildCommitPrompt_CustomTemplate(t *testing.T) {
 	t.Parallel()
 	tmpl := "Generate commit for {DIFF} in {LANGUAGE}. {COMMIT_TYPE_HINT}{ADDITIONAL_CONTEXT}"
-	result := BuildCommitPrompt("my diff", "Portuguese", "", "", tmpl)
+	result := BuildCommitPrompt("my diff", "Portuguese", "", "", tmpl, "")
 
 	if !strings.Contains(result, "my diff") {
 		t.Error("expected custom template to substitute diff")
@@ -50,14 +50,14 @@ func TestBuildCommitPrompt_CustomTemplate(t *testing.T) {
 
 func TestBuildCommitPrompt_CommitTypeHint(t *testing.T) {
 	t.Parallel()
-	result := BuildCommitPrompt("diff", "English", "feat", "", "")
+	result := BuildCommitPrompt("diff", "English", "feat", "", "", "")
 
 	if !strings.Contains(result, "feat") {
 		t.Error("expected commit type hint for valid type")
 	}
 
 	// Invalid type should produce no hint
-	result2 := BuildCommitPrompt("diff", "English", "invalidtype", "", "")
+	result2 := BuildCommitPrompt("diff", "English", "invalidtype", "", "", "")
 	if strings.Contains(result2, "Use the commit type 'invalidtype'") {
 		t.Error("expected no hint for invalid commit type")
 	}
@@ -65,7 +65,7 @@ func TestBuildCommitPrompt_CommitTypeHint(t *testing.T) {
 
 func TestBuildCommitPrompt_AdditionalContext(t *testing.T) {
 	t.Parallel()
-	result := BuildCommitPrompt("diff", "English", "", "extra context here", "")
+	result := BuildCommitPrompt("diff", "English", "", "extra context here", "", "")
 
 	if !strings.Contains(result, "Additional context provided by user") {
 		t.Error("expected additional context header")
@@ -75,7 +75,7 @@ func TestBuildCommitPrompt_AdditionalContext(t *testing.T) {
 	}
 
 	// Empty additional text should not add context section
-	result2 := BuildCommitPrompt("diff", "English", "", "", "")
+	result2 := BuildCommitPrompt("diff", "English", "", "", "", "")
 	if strings.Contains(result2, "Additional context provided by user") {
 		t.Error("expected no additional context when empty")
 	}

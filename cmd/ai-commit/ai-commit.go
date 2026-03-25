@@ -266,7 +266,8 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-    promptText := prompt.BuildCommitPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate)
+    scopeHint := git.SuggestScope(diff)
+    promptText := prompt.BuildCommitPrompt(diff, languageFlag, commitTypeFlag, "", cfg.PromptTemplate, scopeHint)
     if cfg.Limits.Prompt.Enabled && cfg.Limits.Prompt.MaxChars > 0 {
         if len(promptText) > cfg.Limits.Prompt.MaxChars {
             // hard truncate with marker
@@ -328,7 +329,7 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, cfg.EnableEmoji, aiClient, cfg.PromptTemplate, cfg.TicketPattern)
+	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, cfg.EnableEmoji, aiClient, cfg.PromptTemplate, cfg.TicketPattern, scopeHint)
 }
 
 func runAICodeReview(cmd *cobra.Command, args []string) {
@@ -410,6 +411,7 @@ func runInteractiveUI(
     aiClient ai.AIClient,
     promptTemplate string,
     ticketPattern string,
+    scopeHint string,
 ) {
     // Start with streaming if the client supports it and we have a prompt
     startStreaming := false
@@ -432,6 +434,7 @@ func runInteractiveUI(
         startStreaming,
         promptTemplate,
         ticketPattern,
+        scopeHint,
     )
 	program := ui.NewProgram(uiModel)
 	if _, err := program.Run(); err != nil {
