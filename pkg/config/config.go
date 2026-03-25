@@ -11,7 +11,7 @@ import (
 )
 
 const (
-    DefaultProvider         = "phind"
+    DefaultProvider         = "openai"
 )
 
 var (

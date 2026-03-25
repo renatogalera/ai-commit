@@ -25,7 +25,6 @@ import (
     _ "github.com/renatogalera/ai-commit/pkg/provider/ollama"
     _ "github.com/renatogalera/ai-commit/pkg/provider/openai"
     _ "github.com/renatogalera/ai-commit/pkg/provider/openrouter"
-    _ "github.com/renatogalera/ai-commit/pkg/provider/phind"
 	"github.com/renatogalera/ai-commit/pkg/provider/registry"
 	"github.com/renatogalera/ai-commit/pkg/summarizer"
 	"github.com/renatogalera/ai-commit/pkg/template"
@@ -85,7 +84,7 @@ func init() {
     rootCmd.Flags().BoolVar(&interactiveSplitFlag, "interactive-split", false, "Launch interactive commit splitting")
     rootCmd.Flags().BoolVar(&emojiFlag, "emoji", false, "Include emoji in commit message")
     rootCmd.Flags().BoolVar(&manualSemverFlag, "manual-semver", false, "Manually select semantic version bump")
-    rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, google, anthropic, deepseek, phind, ollama, openrouter")
+    rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, google, anthropic, deepseek, ollama, openrouter")
     rootCmd.Flags().StringVar(&modelFlag, "model", "", "Sub-model for the chosen provider")
     rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
     rootCmd.Flags().BoolVar(&msgOnlyFlag, "msg-only", false, "Generate commit message and print to stdout (for hook usage)")
@@ -187,7 +186,7 @@ if key, err := apiKeyFor(provider, ps.APIKey); err == nil {
 } else if requiresAPIKey(provider) {
     return nil, err
 } else {
-    // providers without mandatory keys (phind, ollama)
+    // providers without mandatory keys (ollama)
     ps.APIKey = ""
 }
 

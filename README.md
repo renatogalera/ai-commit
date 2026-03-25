@@ -10,8 +10,7 @@
 
 It supports multiple providers:
 
-* **Phind** (no key by default and free, enjoy!)
-* **OpenAI**
+* **OpenAI** (default)
 * **Google Gemini**
 * **Anthropic Claude**
 * **DeepSeek**
@@ -83,13 +82,9 @@ On first run, AI-Commit creates:
 authorName: "Your Name"
 authorEmail: "youremail@example.com"
 
-provider: "phind"        # default provider if no CLI flag is given
+provider: "openai"       # default provider if no CLI flag is given
 
 providers:
-  phind:
-    apiKey: ""           # Optional for Phind
-    model: "Phind-70B"
-    baseURL: "https://extension.phind.com/agent"  # Example endpoint
   openai:
     apiKey: ""
     model: "chatgpt-4o-latest"
@@ -160,7 +155,7 @@ lockFiles:
 
 For each provider, the code observes:
 
-* `${PROVIDER}_API_KEY` (e.g., `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `PHIND_API_KEY`, `OPENROUTER_API_KEY`)
+* `${PROVIDER}_API_KEY` (e.g., `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`)
 * `${PROVIDER}_BASE_URL` (e.g., `OPENAI_BASE_URL`, `GOOGLE_BASE_URL`, …, `OLLAMA_BASE_URL`)
 
 ---
@@ -209,7 +204,7 @@ ai-commit hook install|uninstall
 
 ### Main flags
 
-* `--provider` — one of: `openai`, `google`, `anthropic`, `deepseek`, `phind`, `ollama`, `openrouter`
+* `--provider` — one of: `openai`, `google`, `anthropic`, `deepseek`, `ollama`, `openrouter`
 * `--model` — overrides `providers.<name>.model`
 * `--apiKey` — overrides `providers.<name>.apiKey` or `${PROVIDER}_API_KEY`
 * `--baseURL` — overrides `providers.<name>.baseURL` or `${PROVIDER}_BASE_URL`
@@ -294,12 +289,6 @@ ai-commit --provider=anthropic --model=claude-3-7-sonnet-latest
 ai-commit --provider=deepseek --model=deepseek-chat --baseURL=https://api.deepseek.com/v1 --apiKey=sk-...
 ```
 
-**Phind (no API key by default)**
-
-```bash
-ai-commit --provider=phind --model=Phind-70B --baseURL=https://extension.phind.com/agent
-```
-
 **Ollama (local)**
 
 ```bash
@@ -357,7 +346,6 @@ ai-commit hook install
 
 | Provider   | API key required | Default model (example)    | Base URL (example)                          | Streaming in code |
 | ---------- | ---------------- | -------------------------- | ------------------------------------------- | ----------------- |
-| Phind      | No (optional)    | `Phind-70B`                | `https://extension.phind.com/agent`         | Yes               |
 | OpenAI     | Yes              | `chatgpt-4o-latest`        | `https://api.openai.com/v1`                 | Yes               |
 | Google     | Yes              | `gemini-2.5-flash`         | (default)                                   | No                |
 | Anthropic  | Yes              | `claude-3-7-sonnet-latest` | `https://api.anthropic.com`                 | Yes               |
@@ -422,7 +410,7 @@ Placeholders:
 
 * **Empty commit message**: if AI returns an empty string, the tool aborts (non-interactive) or stays in the UI. Try regenerating or inspecting the diff.
 * **“API key required” errors**: ensure either `--apiKey`, the `${PROVIDER}_API_KEY` environment variable, or a non-empty `providers.<name>.apiKey` is set.
-* **Phind/Ollama base URL**: must be valid. If you run into connectivity or 4xx from a provider, confirm your endpoint and headers (especially for self-hosted gateways).
+* **Ollama base URL**: must be valid. If you run into connectivity or 4xx from a provider, confirm your endpoint and headers (especially for self-hosted gateways).
 * **Author identity**: set `authorName`/`authorEmail` in `config.yaml` to avoid commits with default values.
 
 ---
@@ -452,3 +440,4 @@ MIT (project’s chart mentions MIT; keep the repo’s `LICENSE` in sync with pu
 * 🔜 In-TUI style review for streaming providers
 
 ---
+
