@@ -276,7 +276,7 @@ func runAICommit(cmd *cobra.Command, args []string) {
     var commitMsg string
     if forceFlag || !supportsStreaming(aiClient) {
         var genErr error
-        commitMsg, genErr = generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, cfg.EnableEmoji)
+        commitMsg, genErr = generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, cfg.EnableEmoji, cfg.TicketPattern)
         if genErr != nil {
             log.Error().Err(genErr).Msg("Commit message generation error")
             os.Exit(1)
@@ -316,7 +316,7 @@ func runAICommit(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, cfg.EnableEmoji, aiClient, cfg.PromptTemplate)
+	runInteractiveUI(ctx, commitMsg, diff, promptText, styleReviewSuggestions, cfg.EnableEmoji, aiClient, cfg.PromptTemplate, cfg.TicketPattern)
 }
 
 func runAICodeReview(cmd *cobra.Command, args []string) {
@@ -397,6 +397,7 @@ func runInteractiveUI(
     enableEmoji bool,
     aiClient ai.AIClient,
     promptTemplate string,
+    ticketPattern string,
 ) {
     // Start with streaming if the client supports it and we have a prompt
     startStreaming := false
@@ -418,6 +419,7 @@ func runInteractiveUI(
         aiClient,
         startStreaming,
         promptTemplate,
+        ticketPattern,
     )
 	program := ui.NewProgram(uiModel)
 	if _, err := program.Run(); err != nil {
@@ -442,6 +444,7 @@ func generateCommitMessage(
 	commitType string,
 	tmpl string,
 	enableEmoji bool,
+	ticketPattern string,
 ) (string, error) {
 	msg, err := client.GetCommitMessage(ctx, promptText)
 	if err != nil {
@@ -457,7 +460,7 @@ func generateCommitMessage(
 		msg = git.PrependCommitType(msg, commitType, enableEmoji)
 	}
 	if tmpl != "" {
-		msg, err = template.ApplyTemplate(tmpl, msg)
+		msg, err = template.ApplyTemplate(tmpl, msg, ticketPattern)
 		if err != nil {
 			return "", err
 		}

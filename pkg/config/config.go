@@ -58,6 +58,7 @@ type Config struct {
     Providers map[string]ProviderSettings `yaml:"providers,omitempty"`
 
     PromptTemplate string `yaml:"promptTemplate,omitempty"`
+    TicketPattern  string `yaml:"ticketPattern,omitempty"`
 
 	AuthorName  string `yaml:"authorName,omitempty"`
 	AuthorEmail string `yaml:"authorEmail,omitempty"`

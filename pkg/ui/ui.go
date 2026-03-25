@@ -176,6 +176,8 @@ type Model struct {
 
 	// promptTemplate stores the configured prompt template so regeneration preserves it.
 	promptTemplate string
+	// ticketPattern stores the custom ticket regex for {TICKET_ID} template placeholder.
+	ticketPattern string
 
 	// styleReview holds optional suggestions from AI for commit style:
 	styleReview string
@@ -195,6 +197,7 @@ func NewUIModel(
 	client ai.AIClient,
 	startStreaming bool,
 	promptTemplate string,
+	ticketPattern string,
 ) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -239,6 +242,7 @@ func NewUIModel(
 		help:          help.New(),
 
 		promptTemplate: promptTemplate,
+		ticketPattern:  ticketPattern,
 		styleReview:    styleReviewSuggestions,
 		startStreaming: startStreaming,
 		errMsg:         "",
@@ -312,7 +316,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.spinner.Spinner = spinner.Dot
 					m.regenCount++
 					m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, userPrompt, m.promptTemplate)
-					return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji)
+					return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji, m.ticketPattern)
 				}
 			case "esc":
 				m.state = stateShowCommit
@@ -351,7 +355,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.regenCount++
 				m.errMsg = ""
 				return m, tea.Batch(m.spinner.Tick,
-					regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji))
+					regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji, m.ticketPattern))
 			}
 			if key.Matches(msg, keyMap.TypeSelect) {
 				m.state = stateSelectType
@@ -397,7 +401,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Rebuild the prompt with the newly selected commit type
 				m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, "", m.promptTemplate)
 				return m, tea.Batch(m.spinner.Tick,
-					regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji))
+					regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji, m.ticketPattern))
 			case "esc", "q":
 				m.state = stateShowCommit
 				return m, nil
@@ -477,7 +481,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			final = git.PrependCommitType(final, m.commitType, m.enableEmoji)
 		}
 		if m.template != "" {
-			if res, err := template.ApplyTemplate(m.template, final); err == nil {
+			if res, err := template.ApplyTemplate(m.template, final, m.ticketPattern); err == nil {
 				final = res
 			}
 		}
@@ -698,7 +702,7 @@ func commitCmd(commitMsg string) tea.Cmd {
 
 // regenCmd calls the AI client to (re)generate a commit message.
 // If the client supports streaming, it wires channels and returns streamStartedMsg.
-func regenCmd(client ai.AIClient, prompt, commitType, tmpl string, enableEmoji bool) tea.Cmd {
+func regenCmd(client ai.AIClient, prompt, commitType, tmpl string, enableEmoji bool, ticketPattern string) tea.Cmd {
 	return func() tea.Msg {
 		// Try streaming if available
 		if sc, ok := client.(ai.StreamingAIClient); ok {
@@ -714,7 +718,7 @@ func regenCmd(client ai.AIClient, prompt, commitType, tmpl string, enableEmoji b
 			}()
 			return streamStartedMsg{deltaCh: deltaCh, doneCh: doneCh}
 		}
-		msg, err := regenerate(prompt, client, commitType, tmpl, enableEmoji)
+		msg, err := regenerate(prompt, client, commitType, tmpl, enableEmoji, ticketPattern)
 		return regenMsg{msg: msg, err: err}
 	}
 }
@@ -734,7 +738,7 @@ func startStreamCmd(client ai.AIClient, prompt string) tea.Cmd {
 			return streamStartedMsg{deltaCh: deltaCh, doneCh: doneCh}
 		}
 		// fallback
-		msg, err := regenerate(prompt, client, "", "", false)
+		msg, err := regenerate(prompt, client, "", "", false, "")
 		return regenMsg{msg: msg, err: err}
 	}
 }
@@ -762,7 +766,7 @@ func waitDoneCmd(done <-chan error) tea.Cmd {
 }
 
 // regenerate performs a non-streaming AI call and normalizes the result.
-func regenerate(prompt string, client ai.AIClient, commitType, tmpl string, enableEmoji bool) (string, error) {
+func regenerate(prompt string, client ai.AIClient, commitType, tmpl string, enableEmoji bool, ticketPattern string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -779,7 +783,7 @@ func regenerate(prompt string, client ai.AIClient, commitType, tmpl string, enab
 		result = git.PrependCommitType(result, commitType, enableEmoji)
 	}
 	if tmpl != "" {
-		result, err = template.ApplyTemplate(tmpl, result)
+		result, err = template.ApplyTemplate(tmpl, result, ticketPattern)
 		if err != nil {
 			return "", err
 		}
