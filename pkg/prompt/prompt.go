@@ -47,6 +47,7 @@ type(scope): description
 ❌ feat: add some changes to the system (not specific)
 
 {COMMIT_TYPE_HINT}
+{SCOPE_HINT}
 Write the message in {LANGUAGE}.
 
 ### DIFF TO ANALYZE:
@@ -132,7 +133,7 @@ func BuildCommitSummaryPrompt(commit *gogitobj.Commit, diffStr, customPromptTemp
 
 // BuildCommitPrompt builds the prompt for generating a commit message.
 // It replaces placeholders with the provided diff, language, commit type, and any additional context.
-func BuildCommitPrompt(diff, language, commitType, additionalText, promptTemplate string) string {
+func BuildCommitPrompt(diff, language, commitType, additionalText, promptTemplate, scopeHint string) string {
 	finalTemplate := promptTemplate
 	if finalTemplate == "" {
 		finalTemplate = DefaultPromptTemplate
@@ -143,7 +144,13 @@ func BuildCommitPrompt(diff, language, commitType, additionalText, promptTemplat
 		commitTypeHint = fmt.Sprintf("- Use the commit type '%s'.\n", commitType)
 	}
 
+	scopeHintStr := ""
+	if scopeHint != "" {
+		scopeHintStr = fmt.Sprintf("- Consider using '%s' as the scope (but override if a better scope fits the changes).\n", scopeHint)
+	}
+
 	promptText := strings.ReplaceAll(finalTemplate, "{COMMIT_TYPE_HINT}", commitTypeHint)
+	promptText = strings.ReplaceAll(promptText, "{SCOPE_HINT}", scopeHintStr)
 	promptText = strings.ReplaceAll(promptText, "{LANGUAGE}", language)
 	promptText = strings.ReplaceAll(promptText, "{DIFF}", diff)
 

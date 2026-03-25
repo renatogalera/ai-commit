@@ -178,6 +178,8 @@ type Model struct {
 	promptTemplate string
 	// ticketPattern stores the custom ticket regex for {TICKET_ID} template placeholder.
 	ticketPattern string
+	// scopeHint stores the auto-detected scope suggestion for the AI prompt.
+	scopeHint string
 
 	// styleReview holds optional suggestions from AI for commit style:
 	styleReview string
@@ -198,6 +200,7 @@ func NewUIModel(
 	startStreaming bool,
 	promptTemplate string,
 	ticketPattern string,
+	scopeHint string,
 ) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -243,6 +246,7 @@ func NewUIModel(
 
 		promptTemplate: promptTemplate,
 		ticketPattern:  ticketPattern,
+		scopeHint:      scopeHint,
 		styleReview:    styleReviewSuggestions,
 		startStreaming: startStreaming,
 		errMsg:         "",
@@ -315,7 +319,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.spinner = spinner.New()
 					m.spinner.Spinner = spinner.Dot
 					m.regenCount++
-					m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, userPrompt, m.promptTemplate)
+					m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, userPrompt, m.promptTemplate, m.scopeHint)
 					return m, regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji, m.ticketPattern)
 				}
 			case "esc":
@@ -399,7 +403,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinner.Spinner = spinner.Dot
 				m.regenCount++
 				// Rebuild the prompt with the newly selected commit type
-				m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, "", m.promptTemplate)
+				m.prompt = prompt.BuildCommitPrompt(m.diff, m.language, m.commitType, "", m.promptTemplate, m.scopeHint)
 				return m, tea.Batch(m.spinner.Tick,
 					regenCmd(m.aiClient, m.prompt, m.commitType, m.template, m.enableEmoji, m.ticketPattern))
 			case "esc", "q":
