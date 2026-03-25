@@ -4,8 +4,8 @@
 authorName: "Your Name"
 authorEmail: "youremail@example.com"
 
-# Which AI provider to use. Valid options: "openai", "google", "anthropic", "deepseek", "phind", "ollama", "openrouter"
-provider: "phind"
+# Which AI provider to use. Valid options: "openai", "google", "anthropic", "deepseek", "ollama", "openrouter"
+provider: "openai"
 
 # provider config (preferred). Override with CLI flags or env vars.
 providers:
@@ -29,10 +29,6 @@ providers:
     apiKey: ""
     model: "openrouter/auto"
     baseURL: "https://openrouter.ai/api/v1"
-  phind:
-    apiKey: "" # Phind does not require an API key by default
-    model: "Phind-70B"
-    baseURL: "https://https.extension.phind.com/agent/"
   ollama:
     model: "llama2"
     baseURL: "http://localhost:11434"
