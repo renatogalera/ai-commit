@@ -58,6 +58,10 @@ sudo mv ai-commit /usr/local/bin/
 * **Interactive split commits** (`--interactive-split`) with chunk selection/inversion.
 * **Emoji support** (`--emoji`) mapped to commit types.
 * **Custom templates** (`--template`) and **prompt template** (`promptTemplate` in config).
+* **Changelog generation** (`ai-commit changelog`) between tags or time ranges.
+* **Ticket auto-detection** from branch names (JIRA, GitHub, Linear) via `{TICKET_ID}` template placeholder.
+* **Git hook integration** (`ai-commit hook install`) for automatic commit message generation.
+* **Scope auto-suggestion** from changed file paths to guide the AI.
 * **Diff/prompt limits** to bound payload sizes.
 * **Lock file filtering** for cleaner AI context.
 
@@ -92,8 +96,8 @@ providers:
     baseURL: "https://api.openai.com/v1"
   google:
     apiKey: ""
-    model: "models/gemini-2.5-flash"
-    baseURL: "https://generativelanguage.googleapis.com"
+    model: "gemini-2.5-flash"
+    baseURL: ""
   anthropic:
     apiKey: ""
     model: "claude-3-7-sonnet-latest"
@@ -124,8 +128,9 @@ interactiveSplit: false
 enableEmoji: false
 
 commitType: ""           # Optional default
-template: ""             # Optional commit message template; can use {COMMIT_MESSAGE} and {GIT_BRANCH}
+template: ""             # Optional commit message template; can use {COMMIT_MESSAGE}, {GIT_BRANCH}, and {TICKET_ID}
 promptTemplate: ""       # Optional global prompt template for AI prompts
+ticketPattern: ""        # Custom regex for ticket extraction from branch names (default: auto-detect JIRA, GitHub, Linear)
 
 commitTypes:
   - type: "feat"     emoji: "✨"
@@ -198,6 +203,8 @@ ai-commit
 ai-commit [flags]
 ai-commit review
 ai-commit summarize
+ai-commit changelog [fromRef..toRef]
+ai-commit hook install|uninstall
 ```
 
 ### Main flags
@@ -208,8 +215,9 @@ ai-commit summarize
 * `--baseURL` — overrides `providers.<name>.baseURL` or `${PROVIDER}_BASE_URL`
 * `--language` — language for prompts/responses (default: `english`)
 * `--commit-type` — force a Conventional Commit type (`feat`, `fix`, …)
-* `--template` — apply a template to the final message (supports `{COMMIT_MESSAGE}` and `{GIT_BRANCH}`)
+* `--template` — apply a template to the final message (supports `{COMMIT_MESSAGE}`, `{GIT_BRANCH}`, and `{TICKET_ID}`)
 * `--review-message` — run AI style review on the generated commit message
+* `--msg-only` — generate commit message and print to stdout (used by git hooks)
 
 ### Workflow control
 
@@ -230,6 +238,23 @@ ai-commit summarize
 
   ```bash
   ai-commit summarize
+  ```
+
+* `changelog` — generate an AI-powered changelog between two refs
+
+  ```bash
+  ai-commit changelog v0.10.0..v0.11.0
+  ai-commit changelog --since=”2 weeks ago”
+  ai-commit changelog --output CHANGELOG.md
+  ai-commit changelog                          # auto-detect: last two tags
+  ```
+
+* `hook install` / `hook uninstall` — manage the `prepare-commit-msg` git hook
+
+  ```bash
+  ai-commit hook install           # install hook
+  ai-commit hook install --force   # overwrite existing hook
+  ai-commit hook uninstall         # remove hook
   ```
 
 > The “fuzzy finder” is embedded via a Go library; no external `fzf` binary is required.
@@ -299,6 +324,33 @@ ai-commit --interactive-split
 ai-commit --semantic-release --manual-semver
 ```
 
+**Generate changelog between releases**
+
+```bash
+ai-commit changelog v0.10.0..v0.11.0
+ai-commit changelog --since="2 weeks ago" --output CHANGELOG.md
+```
+
+**Use ticket ID from branch in template**
+
+```yaml
+# config.yaml
+template: "{COMMIT_MESSAGE}\n\nRefs: {TICKET_ID}"
+```
+
+```bash
+# On branch feature/PROJ-456-add-login:
+ai-commit
+# Result: "feat(auth): add login\n\nRefs: PROJ-456"
+```
+
+**Install as git hook**
+
+```bash
+ai-commit hook install
+# Now 'git commit' auto-generates AI messages
+```
+
 ---
 
 ## Provider matrix
@@ -307,7 +359,7 @@ ai-commit --semantic-release --manual-semver
 | ---------- | ---------------- | -------------------------- | ------------------------------------------- | ----------------- |
 | Phind      | No (optional)    | `Phind-70B`                | `https://extension.phind.com/agent`         | Yes               |
 | OpenAI     | Yes              | `chatgpt-4o-latest`        | `https://api.openai.com/v1`                 | Yes               |
-| Google     | Yes              | `models/gemini-2.5-flash`  | `https://generativelanguage.googleapis.com` | No                |
+| Google     | Yes              | `gemini-2.5-flash`         | (default)                                   | No                |
 | Anthropic  | Yes              | `claude-3-7-sonnet-latest` | `https://api.anthropic.com`                 | Yes               |
 | DeepSeek   | Yes              | `deepseek-chat`            | `https://api.deepseek.com/v1`               | Yes               |
 | OpenRouter | Yes              | `openrouter/auto`          | `https://openrouter.ai/api/v1`              | Yes               |
@@ -345,12 +397,14 @@ template: |
   {COMMIT_MESSAGE}
 
   Branch: {GIT_BRANCH}
+  Refs: {TICKET_ID}
 ```
 
 Placeholders:
 
 * `{COMMIT_MESSAGE}` — replaced with the AI-generated (and type-prefixed) message
 * `{GIT_BRANCH}` — resolved via `git` at runtime
+* `{TICKET_ID}` — auto-extracted from the branch name (supports JIRA `PROJ-123`, GitHub `#42`/`GH-42`, Linear `ENG-456`). Configure a custom regex with `ticketPattern` in config.
 
 ---
 
@@ -389,7 +443,12 @@ MIT (project’s chart mentions MIT; keep the repo’s `LICENSE` in sync with pu
 
 * ✅ Split-commit TUI with chunk selection/inversion
 * ✅ Summarize commits with fuzzy finder
+* ✅ AI-powered changelog generation (`ai-commit changelog`)
+* ✅ Ticket auto-detection from branch names (`{TICKET_ID}`)
+* ✅ Git hook integration (`ai-commit hook install`)
+* ✅ Scope auto-suggestion from changed file paths
+* ✅ CI pipeline with tests and linting
+* ✅ Comprehensive test suite (150+ test cases)
 * 🔜 In-TUI style review for streaming providers
-* 🔜 Extended templates (e.g., footer patterns, ticket IDs)
 
 ---
