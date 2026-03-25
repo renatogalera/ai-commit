@@ -184,6 +184,40 @@ func BuildCommitStyleReviewPrompt(commitMsg, language, promptTemplate string) st
 	return promptText
 }
 
+// DefaultChangelogPromptTemplate is used for changelog generation.
+const DefaultChangelogPromptTemplate = `Generate a polished changelog in Markdown format from the following grouped commit list.
+The changelog covers changes from {FROM_REF} to {TO_REF}.
+
+Write the changelog in {LANGUAGE}.
+
+### RULES:
+1. Output ONLY the changelog markdown, no conversational text.
+2. Use "## <Type>" headers for each group (e.g., "## Features", "## Bug Fixes").
+3. Map commit types to human-readable headers: feat->Features, fix->Bug Fixes, docs->Documentation, style->Styles, refactor->Code Refactoring, test->Tests, chore->Chores, perf->Performance, build->Build System, ci->CI.
+4. Under each header, list changes as bullet points.
+5. Clean up commit messages: remove type prefixes, capitalize first letter.
+6. Combine related commits into a single bullet point where appropriate.
+7. Add a brief one-paragraph summary at the top under a "## Summary" header.
+8. If there are breaking changes, add a "## Breaking Changes" section at the top.
+9. Skip merge commits.
+
+### COMMIT DATA:
+{COMMITS}
+`
+
+// BuildChangelogPrompt builds the prompt for changelog generation.
+func BuildChangelogPrompt(commitData, fromRef, toRef, language, customTemplate string) string {
+	finalTemplate := customTemplate
+	if finalTemplate == "" {
+		finalTemplate = DefaultChangelogPromptTemplate
+	}
+	result := strings.ReplaceAll(finalTemplate, "{LANGUAGE}", language)
+	result = strings.ReplaceAll(result, "{FROM_REF}", fromRef)
+	result = strings.ReplaceAll(result, "{TO_REF}", toRef)
+	result = strings.ReplaceAll(result, "{COMMITS}", commitData)
+	return result
+}
+
 func ExtractSummaryAfterGeneral(aiOutput string) string {
 	markers := []string{"### General Summary", "General Summary"}
 	for _, marker := range markers {
