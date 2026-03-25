@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/renatogalera/ai-commit/pkg/ai"
+	"github.com/renatogalera/ai-commit/pkg/changelog"
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/config"
 	"github.com/renatogalera/ai-commit/pkg/git"
@@ -87,6 +88,7 @@ func init() {
     rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
 
 	rootCmd.AddCommand(newSummarizeCmd(setupAIEnvironment))
+	rootCmd.AddCommand(newChangelogCmd(setupAIEnvironment))
 	rootCmd.AddCommand(reviewCmd)
 }
 
@@ -476,6 +478,73 @@ func enforceCommitMessageStyle(
 		return "", fmt.Errorf("commit message style review failed: %w", err)
 	}
 	return strings.TrimSpace(styleReviewResult), nil
+}
+
+func newChangelogCmd(setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error)) *cobra.Command {
+	var sinceFlag string
+	var outputFlag string
+
+	cmd := &cobra.Command{
+		Use:   "changelog [fromRef..toRef]",
+		Short: "Generate a changelog between two refs using AI",
+		Long:  "Generates a polished changelog by listing commits between two Git references, grouping by type, and using AI to produce formatted markdown.",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			runChangelogCommand(setupAIEnvironment, args, sinceFlag, outputFlag)
+		},
+	}
+
+	cmd.Flags().StringVar(&sinceFlag, "since", "", "Generate changelog for commits since a time (e.g., '2 weeks ago')")
+	cmd.Flags().StringVar(&outputFlag, "output", "", "Write changelog to file instead of stdout")
+
+	return cmd
+}
+
+func runChangelogCommand(
+	setupAIEnvironment func() (context.Context, context.CancelFunc, *config.Config, ai.AIClient, error),
+	args []string,
+	sinceFlag string,
+	outputFlag string,
+) {
+	ctx, cancel, cfg, aiClient, err := setupAIEnvironment()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Setup environment error for changelog command")
+		return
+	}
+	defer cancel()
+
+	language := languageFlag
+	if language == "" {
+		language = "english"
+	}
+
+	opts := changelog.Options{
+		Since: sinceFlag,
+	}
+
+	if len(args) == 1 {
+		parts := strings.SplitN(args[0], "..", 2)
+		if len(parts) == 2 {
+			opts.FromRef = parts[0]
+			opts.ToRef = parts[1]
+		} else {
+			log.Fatal().Msg("Invalid range format. Use: v0.10.0..v0.11.0")
+		}
+	}
+
+	result, err := changelog.Generate(ctx, aiClient, cfg, language, opts)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to generate changelog")
+	}
+
+	if outputFlag != "" {
+		if err := os.WriteFile(outputFlag, []byte(result+"\n"), 0o644); err != nil {
+			log.Fatal().Err(err).Msg("Failed to write changelog to file")
+		}
+		fmt.Printf("Changelog written to %s\n", outputFlag)
+	} else {
+		fmt.Println(result)
+	}
 }
 
 func runInteractiveSplit(
