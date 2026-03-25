@@ -17,6 +17,7 @@ import (
 	"github.com/renatogalera/ai-commit/pkg/committypes"
 	"github.com/renatogalera/ai-commit/pkg/config"
 	"github.com/renatogalera/ai-commit/pkg/git"
+	"github.com/renatogalera/ai-commit/pkg/hook"
 	"github.com/renatogalera/ai-commit/pkg/prompt"
     _ "github.com/renatogalera/ai-commit/pkg/provider/anthropic"
     _ "github.com/renatogalera/ai-commit/pkg/provider/deepseek"
@@ -53,6 +54,7 @@ var (
 	providerFlag         string
 	modelFlag            string
 	reviewMessageFlag    bool
+	msgOnlyFlag          bool
 )
 
 var rootCmd = &cobra.Command{
@@ -86,10 +88,12 @@ func init() {
     rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: openai, google, anthropic, deepseek, phind, ollama, openrouter")
     rootCmd.Flags().StringVar(&modelFlag, "model", "", "Sub-model for the chosen provider")
     rootCmd.Flags().BoolVar(&reviewMessageFlag, "review-message", false, "Review and enforce commit message style using AI")
+    rootCmd.Flags().BoolVar(&msgOnlyFlag, "msg-only", false, "Generate commit message and print to stdout (for hook usage)")
 
 	rootCmd.AddCommand(newSummarizeCmd(setupAIEnvironment))
 	rootCmd.AddCommand(newChangelogCmd(setupAIEnvironment))
 	rootCmd.AddCommand(reviewCmd)
+	rootCmd.AddCommand(newHookCmd())
 }
 
 func main() {
@@ -274,7 +278,7 @@ func runAICommit(cmd *cobra.Command, args []string) {
         }
     }
     var commitMsg string
-    if forceFlag || !supportsStreaming(aiClient) {
+    if forceFlag || msgOnlyFlag || !supportsStreaming(aiClient) {
         var genErr error
         commitMsg, genErr = generateCommitMessage(ctx, aiClient, promptText, commitTypeFlag, templateFlag, cfg.EnableEmoji, cfg.TicketPattern)
         if genErr != nil {
@@ -284,6 +288,14 @@ func runAICommit(cmd *cobra.Command, args []string) {
     } else {
         commitMsg = ""
     }
+
+	if msgOnlyFlag {
+		if strings.TrimSpace(commitMsg) == "" {
+			os.Exit(1)
+		}
+		fmt.Print(commitMsg)
+		return
+	}
 
 	var styleReviewSuggestions string
     if reviewMessageFlag && commitMsg != "" {
@@ -548,6 +560,55 @@ func runChangelogCommand(
 	} else {
 		fmt.Println(result)
 	}
+}
+
+func newHookCmd() *cobra.Command {
+	hookCmd := &cobra.Command{
+		Use:   "hook",
+		Short: "Manage Git hooks for ai-commit",
+		Long:  "Install or uninstall the prepare-commit-msg Git hook that auto-generates commit messages.",
+	}
+
+	var hookForceFlag bool
+	installCmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install the prepare-commit-msg Git hook",
+		Run: func(cmd *cobra.Command, args []string) {
+			thirdParty, _ := hook.ExistingHookIsThirdParty()
+			if thirdParty && !hookForceFlag {
+				fmt.Println("An existing prepare-commit-msg hook was found that was not installed by ai-commit.")
+				fmt.Print("Overwrite? (y/N): ")
+				var answer string
+				fmt.Scanln(&answer)
+				if strings.ToLower(strings.TrimSpace(answer)) != "y" {
+					fmt.Println("Aborted.")
+					return
+				}
+				hookForceFlag = true
+			}
+			if err := hook.Install(hookForceFlag); err != nil {
+				log.Fatal().Err(err).Msg("Failed to install hook")
+			}
+			fmt.Println("prepare-commit-msg hook installed successfully.")
+			fmt.Println("Now 'git commit' will auto-generate AI commit messages.")
+		},
+	}
+	installCmd.Flags().BoolVar(&hookForceFlag, "force", false, "Overwrite existing hook")
+
+	uninstallCmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Uninstall the prepare-commit-msg Git hook",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := hook.Uninstall(); err != nil {
+				log.Fatal().Err(err).Msg("Failed to uninstall hook")
+			}
+			fmt.Println("prepare-commit-msg hook uninstalled successfully.")
+		},
+	}
+
+	hookCmd.AddCommand(installCmd)
+	hookCmd.AddCommand(uninstallCmd)
+	return hookCmd
 }
 
 func runInteractiveSplit(
